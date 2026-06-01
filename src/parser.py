@@ -59,7 +59,7 @@ def strip_and_check(equation_str: str, args) -> tuple[str, bool]:
     return cleaned, is_assignment
 
 
-def parse_free_form_equation(equation_str: str, args) -> dict:
+def parse_free_form_equation(equation_str: str, args, context=None) -> dict:
     if args.verbose:
         print("parser entered, starting regex tokenization...")
 
@@ -67,5 +67,43 @@ def parse_free_form_equation(equation_str: str, args) -> dict:
     
     raw_tokens = re.findall(token_pattern, equation_str)
 
+    # Helper to check if identifier is a known function call
+    def is_function(name):
+        builtins = {"sqrt", "cbrt", "log", "ln", "exp", "sin", "cos", "tan", "abs"}
+        if name.lower() in builtins:
+            return True
+        if context and name.lower() in context._functions:
+            return True
+        return False
 
-    return dict(enumerate(raw_tokens))
+    # Insert implicit multiplication '*' tokens
+    processed_tokens = []
+    for i in range(len(raw_tokens)):
+        if i > 0:
+            t1 = raw_tokens[i-1]
+            t2 = raw_tokens[i]
+            
+            insert_star = False
+            
+            # 1. Digit followed by variable/alpha or parenthesized expression
+            # e.g., '2' followed by 'x', 'i', 'pi', or '('
+            if t1.replace('.', '', 1).isdigit() and (t2.isalpha() or t2 == '('):
+                insert_star = True
+            
+            # 2. Variable/alpha followed by parenthesized expression (unless it's a function call)
+            # e.g., 'x' followed by '('
+            elif t1.isalpha() and t2 == '(':
+                if not is_function(t1):
+                    insert_star = True
+            
+            # 3. Close parenthesis followed by digit, alpha, or open parenthesis
+            # e.g., ')' followed by '2', 'x', or '('
+            elif t1 == ')' and (t2.replace('.', '', 1).isdigit() or t2.isalpha() or t2 == '('):
+                insert_star = True
+                
+            if insert_star:
+                processed_tokens.append('*')
+                
+        processed_tokens.append(raw_tokens[i])
+
+    return dict(enumerate(processed_tokens))

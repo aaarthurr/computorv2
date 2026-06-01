@@ -46,7 +46,7 @@ if __name__ == "__main__":
             
             prompt, is_assignment = strip_and_check(prompt, args)
 
-            tokens = parse_free_form_equation(prompt, args)
+            tokens = parse_free_form_equation(prompt, args, context)
 
 
             tokens_list = [
@@ -63,5 +63,8 @@ if __name__ == "__main__":
             
 
             print(tokens)
+        except (EOFError, KeyboardInterrupt):
+            print("\nExiting...")
+            break
         except Exception as e:
             print(f"Error: {e}")

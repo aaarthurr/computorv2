@@ -62,10 +62,16 @@ def assign(tokens: list, context: RuntimeContext, args) -> None:
 
         resolved_value = evaluate_rhs_expression(rhs_tokens, context, args)
         
-        context.store_variable(var_name, resolved_value)
+        # Unwrap list of 1 constant monomial to its clean underlying scalar coefficient
+        if len(resolved_value) == 1 and resolved_value[0].is_constant():
+            clean_value = resolved_value[0].coefficient
+        else:
+            clean_value = resolved_value
+            
+        context.store_variable(var_name, clean_value)
         
-        # Print the success output format to console
-        print(resolved_value)
+        # Print the clean, formatted scalar value to console
+        print(clean_value)
         return
 
     # 3. Track B: Function Assignment (LHS must match the 'name(param)' signature pattern)

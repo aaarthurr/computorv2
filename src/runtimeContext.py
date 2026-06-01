@@ -39,8 +39,13 @@ class RuntimeContext:
 
     def lookup_variable(self, name: str):
         clean = name.lower()
+        if clean == 'i':
+            from .number import Rational, ComplexRational
+            return ComplexRational(Rational(0), Rational(1))
         if clean in self._immutable_constants:
-            return self._immutable_constants[clean]
+            from .number import Rational
+            val = self._immutable_constants[clean]
+            return Rational.from_string(f"{val:.12f}".rstrip('0').rstrip('.'))
         return self._variables.get(clean, None)
 
     def lookup_function(self, name: str):

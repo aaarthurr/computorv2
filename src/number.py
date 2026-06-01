@@ -102,6 +102,27 @@ class Rational:
             other = Rational(other)
         return other * self.reciprocal()
 
+    def __mod__(self, other):
+        if isinstance(other, int):
+            other = Rational(other)
+            
+        if isinstance(other, Rational):
+            if other.num == 0:
+                raise ZeroDivisionError("Math Error: Modulo by zero.")
+            common_den = self.den * other.den
+            self_num = self.num * other.den
+            other_num = other.num * self.den
+            remainder_num = self_num % other_num
+            return Rational(remainder_num, common_den)
+            
+        return NotImplemented
+
+    def __rmod__(self, other):
+        if isinstance(other, int):
+            other = Rational(other)
+        return other.__mod__(self)
+
+
     def __repr__(self):
         if self.den == 1:
             return f"{self.num}"
@@ -216,15 +237,21 @@ class ComplexRational:
             other = ComplexRational(other, Rational(0))
         return other / self
 
+    def __eq__(self, other):
+        if isinstance(other, (int, float, Rational)):
+            other = ComplexRational(other, Rational(0))
+        if isinstance(other, ComplexRational):
+            return self.real == other.real and self.imag == other.imag
+        return False
 
     def __repr__(self):
+        # Purely real (includes 0 + 0i)
+        if self.imag.num == 0:
+            return f"{self.real}"
+            
         # Purely imaginary
         if self.real.num == 0:
             return f"{self.imag}i"
-            
-        # Purely real
-        if self.imag.num == 0:
-            return f"{self.real}"
             
         # Standard complex layout
         sign = "+" if self.imag.num > 0 else "-"
