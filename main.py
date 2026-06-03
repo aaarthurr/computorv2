@@ -2,7 +2,7 @@ import argparse
 import sys
 import io
 
-from src.parser import parse_free_form_equation, strip_and_check
+from src.parser import parse_free_form_equation, strip_and_check, get_options
 from src.maths import solve, assign
 
 
@@ -30,23 +30,21 @@ if __name__ == "__main__":
             prompt = input("> ")
 
             if prompt == "context":
-                print("\n--- CURRENT CONTEXT ---")
-                print("Variables:")
-                for var_name, value in context._variables.items():
-                    print(f"  {var_name} = {value}")
-                print("Functions:")
-                for func_name, func_data in context._functions.items():
-                    print(f"  {func_name}({func_data['parameter']}) = {func_data['tokens']}")
+                context.print_context()
                 continue
 
 
             if prompt.lower() in {"exit", "quit"}:
                 print("Exiting...")
                 break
+
+            prompt, tags = get_options(prompt)
+            print(f"Parsed options: {tags}")
+            print(f"Raw input: {prompt}")
             
             prompt, is_assignment = strip_and_check(prompt, args)
 
-            tokens = parse_free_form_equation(prompt, args, context)
+            tokens = parse_free_form_equation(prompt, args, context, is_assignment=is_assignment)
 
 
             tokens_list = [
@@ -55,14 +53,10 @@ if __name__ == "__main__":
             ]
 
             if not is_assignment:
-                print("\n--- SOLVING ---")
                 solve(tokens_list, context, args)
             else:
                 assign(tokens_list, context, args)
 
-            
-
-            print(tokens)
         except (EOFError, KeyboardInterrupt):
             print("\nExiting...")
             break

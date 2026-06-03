@@ -21,9 +21,9 @@ class RuntimeContext:
             "log": math.log10,
             "ln": math.log,
             "exp": math.exp,
-            "sin": math.sin,
-            "cos": math.cos,
-            "tan": math.tan,
+            "sin": lambda x: math.sin(math.radians(x)),
+            "cos": lambda x: math.cos(math.radians(x)),
+            "tan": lambda x: math.tan(math.radians(x)),
             "abs": abs
         }
 
@@ -61,6 +61,26 @@ class RuntimeContext:
             raise ValueError(f"Context Error: '{name}' is already defined as a user function.")
         self._variables[name.lower()] = copy.deepcopy(value)
 
+    def check_recursion_cycle(self, start_func: str, current_func: str, functions_dict: dict, rhs_tokens: list) -> None:
+        # Gather all user-defined functions called in this expression
+        called_funcs = set()
+        for token in rhs_tokens:
+            if isinstance(token, str) and token.isalpha():
+                token_clean = token.lower()
+                if token_clean in functions_dict:
+                    called_funcs.add(token_clean)
+                    
+        for func in called_funcs:
+            # If we trace back to the function currently being defined, we found a cycle!
+            if func == start_func:
+                raise ValueError(
+                    f"Context Error: Infinite loop detected! "
+                    f"Defining '{start_func}' creates a recursive cycle involving '{current_func}' and '{func}'."
+                )
+            # Recursively inspect the dependencies of the called function
+            if func in functions_dict:
+                self.check_recursion_cycle(start_func, func, functions_dict, functions_dict[func]["tokens"])
+
     def store_function(self, name: str, parameter: str, rhs_tokens: list) -> None:
         if self.is_reserved_name(name):
             raise ValueError(f"Context Error: '{name}' is a protected system name.")
@@ -71,12 +91,25 @@ class RuntimeContext:
         if name.lower() in [t.lower() for t in rhs_tokens if isinstance(t, str)]:
             raise ValueError(f"Context Error: Infinite self-recursion blocked for function '{name}'.")
             
+        param_clean = parameter.lower()
+        for token in rhs_tokens:
+            if isinstance(token, str) and token.isalpha():
+                token_clean = token.lower()
+                # 1. Allow already defined user functions, parameter, and system constants
+                if (token_clean != param_clean and 
+                    not self.is_reserved_name(token_clean) and 
+                    token_clean not in self._functions):
+                    raise ValueError(f"Context Error: Function definition '{name}' cannot reference external variable '{token}'.")
+            
+        # 2. Run the recursion loop check (LHS 'name' is start_func)
+        self.check_recursion_cycle(name.lower(), name.lower(), self._functions, rhs_tokens)
+            
         self._functions[name.lower()] = {
             "type": "USER",
             "parameter": parameter.lower(),
             "tokens": list(rhs_tokens)
         }
-    
+
     def evaluate_function_call(self, func_name: str) -> list:
         """Executes built-in callbacks or substitutes user templates."""
         func_data = self.context.lookup_function(func_name)
@@ -105,3 +138,22 @@ class RuntimeContext:
         else:
             # User defined function substitution logic...
             pass
+
+    def print_context(self):
+        print("Constants:")
+        for const_name, value in self._immutable_constants.items():
+            print(f"  {const_name} = {value}")
+        print("Built-in Functions:")
+        for func_name, func_data in self._builtins.items():
+            print(f"  {func_name}")
+
+        print("-------------------------")
+        print("Variables:")
+        for var_name, value in self._variables.items():
+            print(f"  {var_name} = {value}")
+
+
+        print("Functions:")
+        for func_name, func_data in self._functions.items():
+            tokens_str = "".join(str(t) for t in func_data["tokens"])
+            print(f"  {func_name}({func_data['parameter']}) = {tokens_str}")

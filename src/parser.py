@@ -11,6 +11,23 @@ def resolve_signs(match):
     return '-' if sequence.count('-') % 2 != 0 else '+'
 
 
+def get_options(text: str) -> tuple[str, list[str]]:
+    cleaned_input = text.rstrip()
+
+    end_block_match = re.search(r"(?:\s*#[^\s]+)+$", cleaned_input)
+
+    if not end_block_match:
+        return cleaned_input, []
+
+    start_of_tags = end_block_match.start()
+    clean_text = cleaned_input[:start_of_tags].rstrip()
+
+    tags_block = end_block_match.group(0)
+    tags_list = re.findall(r"#([a-zA-Z0-9_-]+)", tags_block)
+
+    return clean_text, tags_list
+
+
 def strip_and_check(equation_str: str, args) -> tuple[str, bool]:
     cleaned = equation_str.replace(" ", "")
 
@@ -48,8 +65,11 @@ def strip_and_check(equation_str: str, args) -> tuple[str, bool]:
     if cleaned.count('=') > 1:
         raise ValueError("Syntax Error: The expression must contain at most one '=' assignment or boundary sign.")
     
-    if is_assignment and cleaned.count('=') != 1:
+    if is_assignment and cleaned.count('=') > 1:
         raise ValueError("Syntax Error: Assignment instructions must contain exactly one '=' operator.")
+    
+    if is_assignment and cleaned.count('=') == 0:
+        is_assignment = False  # Reclassify as non-assignment if no '=' is present
 
     if args.verbose:
         GREEN = "\033[92m"
@@ -59,7 +79,9 @@ def strip_and_check(equation_str: str, args) -> tuple[str, bool]:
     return cleaned, is_assignment
 
 
-def parse_free_form_equation(equation_str: str, args, context=None) -> dict:
+
+
+def parse_free_form_equation(equation_str: str, args, context=None, is_assignment: bool = False) -> dict:
     if args.verbose:
         print("parser entered, starting regex tokenization...")
 
@@ -78,6 +100,8 @@ def parse_free_form_equation(equation_str: str, args, context=None) -> dict:
 
     # Insert implicit multiplication '*' tokens
     processed_tokens = []
+    eq_index = raw_tokens.index('=') if (is_assignment and '=' in raw_tokens) else -1
+
     for i in range(len(raw_tokens)):
         if i > 0:
             t1 = raw_tokens[i-1]
@@ -85,21 +109,23 @@ def parse_free_form_equation(equation_str: str, args, context=None) -> dict:
             
             insert_star = False
             
-            # 1. Digit followed by variable/alpha or parenthesized expression
-            # e.g., '2' followed by 'x', 'i', 'pi', or '('
-            if t1.replace('.', '', 1).isdigit() and (t2.isalpha() or t2 == '('):
-                insert_star = True
-            
-            # 2. Variable/alpha followed by parenthesized expression (unless it's a function call)
-            # e.g., 'x' followed by '('
-            elif t1.isalpha() and t2 == '(':
-                if not is_function(t1):
+            # If it's an assignment, do not insert '*' on the LHS (i <= eq_index)
+            if not (is_assignment and i <= eq_index):
+                # 1. Digit followed by variable/alpha or parenthesized expression
+                # e.g., '2' followed by 'x', 'i', 'pi', or '('
+                if t1.replace('.', '', 1).isdigit() and (t2.isalpha() or t2 == '('):
                     insert_star = True
-            
-            # 3. Close parenthesis followed by digit, alpha, or open parenthesis
-            # e.g., ')' followed by '2', 'x', or '('
-            elif t1 == ')' and (t2.replace('.', '', 1).isdigit() or t2.isalpha() or t2 == '('):
-                insert_star = True
+                
+                # 2. Variable/alpha followed by parenthesized expression (unless it's a function call)
+                # e.g., 'x' followed by '('
+                elif t1.isalpha() and t2 == '(':
+                    if not is_function(t1):
+                        insert_star = True
+                
+                # 3. Close parenthesis followed by digit, alpha, or open parenthesis
+                # e.g., ')' followed by '2', 'x', or '('
+                elif t1 == ')' and (t2.replace('.', '', 1).isdigit() or t2.isalpha() or t2 == '('):
+                    insert_star = True
                 
             if insert_star:
                 processed_tokens.append('*')

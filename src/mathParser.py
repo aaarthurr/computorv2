@@ -19,6 +19,8 @@ class MathParser:
         return None
 
     def consume(self) -> str:
+        if self.cursor >= len(self.tokens):
+            raise ValueError("Syntax Error: Unexpected end of expression.")
         token = self.tokens[self.cursor]
         self.cursor += 1
         return token
@@ -36,10 +38,10 @@ class MathParser:
             terms.extend(right_terms)
         return self.compress_monomials(terms)
 
-    # --- PEMDAS LAYER 2: Multiplication, Division & Modulo ---
+    # --- PEMDAS LAYER 2: Multiplication, Division, Modulo & Matrix Product ---
     def parse_term(self) -> list:
         factors = self.parse_power()
-        while self.peek() in ('*', '/', '%'):
+        while self.peek() in ('*', '/', '%', '**'):
             op = self.consume()
             right_factors = self.parse_power()
             factors = self.multiply_lists(factors, right_factors, op)
@@ -48,16 +50,59 @@ class MathParser:
     # --- PEMDAS LAYER 3: Exponentiation ---
     def parse_power(self) -> list:
         factors = self.parse_factor()
-        while self.peek() in ('**', '^'):
+        while self.peek() == '^':
             op = self.consume()
             right_factors = self.parse_factor()
             factors = self.power_lists(factors, right_factors)
         return factors
 
+    def parse_matrix(self) -> list:
+        self.consume() # consume the opening '['
+        rows = []
+        if self.peek() == ']':
+            raise ValueError("Syntax Error: Matrix must start with a '[['.")
+        
+        while self.peek() == '[':
+            self.consume() # consume the opening '[' of the row
+            row_ellements = []
+
+            while True:
+                elem_expr = self.parse_expression()
+                if len(elem_expr) != 1 or not elem_expr[0].is_constant():
+                    raise ValueError("Syntax Error: Matrix elements must be single constant values.")
+                row_ellements.append(elem_expr[0].coefficient)
+
+                next_token = self.peek()
+                if next_token == ',':
+                    self.consume() # consume the comma and continue parsing the next element
+                elif next_token == ']':
+                    break
+                else:
+                    raise ValueError("Syntax Error: Expected ',' or ']' in matrix row, got '{next_token}'.")
+
+            self.consume() # consume the closing ']' of the row
+            rows.append(row_ellements)
+
+            next_token = self.peek()
+            if next_token == ';':
+                self.consume() # consume ';'
+                if self.peek() != '[':
+                    raise ValueError("Syntax Error: Expected '[' for new row after ';'")
+            elif next_token == ']':
+                break
+            else:
+                raise ValueError(f"Syntax Error: Expected ';' or ']' after matrix row, got '{next_token}'")
+                
+        self.consume() # consume outer ']'
+        
+        from .matrix import Matrix
+        return [Monomial(coefficient=Matrix(rows))]
+
     # --- PEMDAS LAYER 4: Literals, Parens, Variables, Functions, Unary ---
     def parse_factor(self) -> list:
-        # Check for unary operators
-        if self.peek() == '-':
+        if self.peek() == '[': #check for matrix literal
+            return self.parse_matrix()
+        if self.peek() == '-': # Check for unary operators
             self.consume() # consume '-'
             factor = self.parse_factor()
             # Negate all monomials in factor
@@ -163,8 +208,24 @@ class MathParser:
             res_rat = Rational.from_string(f"{result:.12f}".rstrip('0').rstrip('.'))
             return [Monomial(coefficient=res_rat)]
         else:
-            # User defined function substitution logic goes here...
-            pass
+            param_name = func_data["parameter"]
+            rhs_tokens = func_data["tokens"]
+
+            old_val = self.context._variables.get(param_name, None)
+
+            try:
+                self.context._variables[param_name] = argument_monomials
+                sub_parser = MathParser(rhs_tokens, self.context, allow_unbound=self.allow_unbound)
+                result = sub_parser.parse_expression()
+                
+                return result
+            finally:
+                # 4. Clean up the scope in all cases (success or crash)
+                if old_val is not None:
+                    self.context._variables[param_name] = old_val
+                else:
+                    self.context._variables.pop(param_name, None)
+
 
     def compress_monomials(self, term_list: list) -> list:
         """Groups terms with the same power to keep the list flat and clean."""
@@ -232,11 +293,31 @@ class MathParser:
                     result.append(Monomial(coefficient=new_coeff, variable=new_var, power=new_pwr))
             return self.compress_monomials(result)
             
+        elif op == '**':
+            result = []
+            for m1 in left:
+                for m2 in right:
+                    if not m1.is_constant() or not m2.is_constant():
+                        raise ValueError("Matrix Error: Matrix multiplication with variables is not supported.")
+                    
+                    from .matrix import Matrix
+                    if not isinstance(m1.coefficient, Matrix) or not isinstance(m2.coefficient, Matrix):
+                        raise ValueError("Matrix Error: Operator '**' is only defined between matrices.")
+                    
+                    new_coeff = m1.coefficient.matmul(m2.coefficient)
+                    result.append(Monomial(coefficient=new_coeff))
+            return self.compress_monomials(result)
+
+
         elif op == '/':
             if len(right) != 1 or not right[0].is_constant():
                 raise ValueError("Math Error: Division by non-constant expressions is not supported.")
             divisor = right[0].coefficient
             
+            from .matrix import Matrix
+            if isinstance(divisor, Matrix):
+                raise ValueError("Math Error: Division of matrices is not supported. Use the inverse function and multiplication instead.")
+
             is_zero = False
             if isinstance(divisor, (int, float)):
                 is_zero = divisor == 0
@@ -261,11 +342,15 @@ class MathParser:
             if not isinstance(divisor, Rational):
                 raise ValueError("Math Error: Modulo is only supported with real rational numbers.")
                 
+            from .matrix import Matrix
             result = []
             for m in left:
-                if not isinstance(m.coefficient, Rational):
-                    raise ValueError("Math Error: Modulo is only supported on real rational numbers.")
-                new_coeff = m.coefficient % divisor
+                if isinstance(m.coefficient, Matrix):
+                    new_coeff = m.coefficient % divisor
+                elif not isinstance(m.coefficient, Rational):
+                    raise ValueError("Math Error: Modulo is only supported on real rational numbers or matrices.")
+                else:
+                    new_coeff = m.coefficient % divisor
                 result.append(Monomial(coefficient=new_coeff, variable=m.variable, power=m.power))
             return self.compress_monomials(result)
             

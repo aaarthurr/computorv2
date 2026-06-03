@@ -128,6 +128,10 @@ class Rational:
             return f"{self.num}"
         return f"{self.num}/{self.den}"
 
+    def __str__(self):
+        from .utils import format_rational
+        return format_rational(self)
+
     def __eq__(self, other):
         """
         Crucial for the parser's compress_monomials to check if a coefficient is 0.
@@ -257,3 +261,7 @@ class ComplexRational:
         sign = "+" if self.imag.num > 0 else "-"
         # Utilizes the newly added Rational.__abs__ to prevent printing "4 + -3i"
         return f"{self.real} {sign} {abs(self.imag)}i"
+
+    def __str__(self):
+        from .utils import format_complex
+        return format_complex(self)
