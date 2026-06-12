@@ -10,12 +10,48 @@ from src.maths import solve, assign
 from src.number import Rational, ComplexRational
 from src.runtimeContext import RuntimeContext
 
+override_options = ["context", "delete", "derivate", "curv", "display"]
+passive_options = ["rad", "frac", "dec"]
+
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Computor V1: The Parser")
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose mode")
 
     return parser.parse_args()
 
+
+def catch_override_options(tags_list, prompt):
+    tag = [t for t in tags_list if t in override_options]
+    if len(tag) > 1:
+        raise ValueError(f"Syntax Error: Multiple override options detected: {tag}. Only one of {override_options} can be used at a time.")
+    
+    if not tag:
+        return False
+    
+    if tag[0] == "context":
+        context.print_context()
+        return True
+    if tag[0] == "delete":
+        name = prompt.strip()
+        if context.remove(name):
+            print(f"Deleted '{name}' from memory.")
+        else:
+            print(f"Error: '{name}' not found in memory (or is protected).")
+        return True
+    
+    if tag[0] == "derivate":
+        base_expr, param, derived_expr = context.derivate(prompt.strip())
+        print(f"Derivate of {base_expr} with respect to {param} is: {derived_expr}")
+        return True
+    
+    if tag[0] == "curv":
+        print("Curv option selected: This will compute the curvature of the current polynomial.")
+        return True
+    
+    if tag[0] == "display":
+        context.display(prompt.strip())
+        return True
+    return False
 
 if __name__ == "__main__":
     args = parse_arguments()
@@ -29,18 +65,15 @@ if __name__ == "__main__":
         try:
             prompt = input("> ")
 
-            if prompt == "context":
-                context.print_context()
-                continue
-
-
             if prompt.lower() in {"exit", "quit"}:
                 print("Exiting...")
                 break
 
             prompt, tags = get_options(prompt)
-            print(f"Parsed options: {tags}")
-            print(f"Raw input: {prompt}")
+
+            catched =catch_override_options(tags, prompt)
+            if catched:
+                continue
             
             prompt, is_assignment = strip_and_check(prompt, args)
 

@@ -100,61 +100,69 @@ class MathParser:
 
     # --- PEMDAS LAYER 4: Literals, Parens, Variables, Functions, Unary ---
     def parse_factor(self) -> list:
+        # 1. Unary prefix operators & matrix check
         if self.peek() == '[': #check for matrix literal
-            return self.parse_matrix()
-        if self.peek() == '-': # Check for unary operators
+            factor = self.parse_matrix()
+        elif self.peek() == '-': # Check for unary operators
             self.consume() # consume '-'
             factor = self.parse_factor()
             # Negate all monomials in factor
             for m in factor:
                 m.coefficient = -m.coefficient
-            return factor
         elif self.peek() == '+':
             self.consume() # consume '+'
-            return self.parse_factor()
-
-        token = self.consume()
-
-        # 1. Handle Parentheses
-        if token == '(':
-            inner_expr = self.parse_expression()
-            if self.consume() != ')':
-                raise ValueError("Syntax Error: Missing closing parenthesis.")
-            return inner_expr
-
-        # 2. Handle Numbers
-        if token.replace('.', '', 1).isdigit():
-            parsed_fraction = Rational.from_string(token)
-            return [Monomial(coefficient=parsed_fraction)]
-
-        # 3. Handle Identifiers (Variables & Functions)
-        if token.isalpha():
-            # Check if it's a Function Call: e.g., "sqrt(" or "f("
-            if self.peek() == '(':
-                return self.evaluate_function_call(token)
+            factor = self.parse_factor()
             
-            # Otherwise, it's a Variable. Look it up!
-            stored_val = self.context.lookup_variable(token)
-            
-            # EAGER EVALUATION: If found, inject its value instantly
-            if stored_val is not None:
-                # Wrap scalar values (Rational, ComplexRational) into Monomial list
-                if isinstance(stored_val, (Rational, ComplexRational)):
-                    return [Monomial(coefficient=copy.deepcopy(stored_val))]
-                elif isinstance(stored_val, list):
-                    return copy.deepcopy(stored_val)
+        else:
+            token = self.consume()
+
+            # 2. Handle Parentheses
+            if token == '(':
+                inner_expr = self.parse_expression()
+                if self.consume() != ')':
+                    raise ValueError("Syntax Error: Missing closing parenthesis.")
+                factor = inner_expr
+
+            # 3. Handle Numbers
+            elif token.replace('.', '', 1).isdigit():
+                parsed_fraction = Rational.from_string(token)
+                factor = [Monomial(coefficient=parsed_fraction)]
+
+            # 4. Handle Identifiers (Variables & Functions)
+            elif token.isalpha():
+                # Check if it's a Function Call: e.g., "sqrt(" or "f("
+                if self.peek() == '(':
+                    factor = self.evaluate_function_call(token)
                 else:
-                    return [Monomial(coefficient=copy.deepcopy(stored_val))]
-            
-            # If not found, check our security lock!
-            if self.allow_unbound:
-                # We are solving an equation (e.g., 'x = 0?'), so keep 'x' as a symbolic unknown
-                return [Monomial(coefficient=Rational(1), variable=token, power=1)]
+                    # Otherwise, it's a Variable. Look it up!
+                    stored_val = self.context.lookup_variable(token)
+                    
+                    # EAGER EVALUATION: If found, inject its value instantly
+                    if stored_val is not None:
+                        # Wrap scalar values (Rational, ComplexRational) into Monomial list
+                        if isinstance(stored_val, (Rational, ComplexRational)):
+                            factor = [Monomial(coefficient=copy.deepcopy(stored_val))]
+                        elif isinstance(stored_val, list):
+                            factor = copy.deepcopy(stored_val)
+                        else:
+                            factor = [Monomial(coefficient=copy.deepcopy(stored_val))]
+                    else:
+                        # If not found, check our security lock!
+                        if self.allow_unbound:
+                            # We are solving an equation (e.g., 'x = 0?'), so keep 'x' as a symbolic unknown
+                            factor = [Monomial(coefficient=Rational(1), variable=token, power=1)]
+                        else:
+                            # We are in Assignment Mode (e.g., 'a = x'). Crash securely.
+                            raise ValueError(f"Runtime Error: Variable '{token}' is undefined.")
             else:
-                # We are in Assignment Mode (e.g., 'a = x'). Crash securely.
-                raise ValueError(f"Runtime Error: Variable '{token}' is undefined.")
+                raise ValueError(f"Syntax Error: Unexpected factor '{token}'")
 
-        raise ValueError(f"Syntax Error: Unexpected factor '{token}'")
+        # --- 5. Postfix Unary '!' ---
+        while self.peek() == '!':
+            self.consume()  # consume the '!'
+            factor = self.apply_factorial(factor)
+
+        return factor
 
     # --- HELPER ROUTINES ---
     def evaluate_function_call(self, func_name: str) -> list:
@@ -217,7 +225,8 @@ class MathParser:
                 self.context._variables[param_name] = argument_monomials
                 sub_parser = MathParser(rhs_tokens, self.context, allow_unbound=self.allow_unbound)
                 result = sub_parser.parse_expression()
-                
+                if sub_parser.peek() is not None:
+                    raise ValueError(f"Syntax Error: Unexpected token '{sub_parser.peek()}' in function evaluation.")
                 return result
             finally:
                 # 4. Clean up the scope in all cases (success or crash)
@@ -393,3 +402,22 @@ class MathParser:
         for _ in range(power - 1):
             result = self.multiply_lists(result, left, '*')
         return result
+
+
+    def apply_factorial(self, factor: list) -> list:
+        if len(factor) != 1 or not factor[0].is_constant():
+            raise ValueError("Math Error: Factorial can only be computed on constant integers.")
+            
+        val = factor[0].coefficient
+        
+        from .number import Rational
+        if not isinstance(val, Rational):
+            raise ValueError("Math Error: Factorial is only supported on real integers.")
+            
+        if val.den != 1 or val.num < 0:
+            raise ValueError("Math Error: Factorial is only defined for non-negative integers.")
+            
+        import math
+        res_num = math.factorial(val.num)
+        
+        return [Monomial(coefficient=Rational(res_num))]

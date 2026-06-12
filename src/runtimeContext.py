@@ -1,4 +1,6 @@
 import math
+import matplotlib.pyplot as plt
+import numpy as np
 import copy
 
 class RuntimeContext:
@@ -82,6 +84,13 @@ class RuntimeContext:
                 self.check_recursion_cycle(start_func, func, functions_dict, functions_dict[func]["tokens"])
 
     def store_function(self, name: str, parameter: str, rhs_tokens: list) -> None:
+        # Validate syntax of function body before storing
+        from .mathParser import MathParser
+        parser = MathParser(rhs_tokens, self, allow_unbound=True)
+        parser.parse_expression()
+        if parser.peek() is not None:
+            raise ValueError(f"Syntax Error: Unexpected token '{parser.peek()}' in function definition.")
+
         if self.is_reserved_name(name):
             raise ValueError(f"Context Error: '{name}' is a protected system name.")
         if name.lower() in self._variables:
@@ -138,6 +147,160 @@ class RuntimeContext:
         else:
             # User defined function substitution logic...
             pass
+    
+
+    def remove(self, name: str) -> bool:
+        clean = name.lower()
+        deleted = False
+        
+        # Remove from variables if present
+        if clean in self._variables:
+            del self._variables[clean]
+            deleted = True
+            
+        # Remove from functions if present
+        if clean in self._functions:
+            del self._functions[clean]
+            deleted = True
+            
+        return deleted
+
+
+    def derivate(self, name) -> dict:
+
+        #local import to prevent cicular
+        from .mathParser import MathParser
+        from .monomial import Monomial
+        from .number import Rational
+
+
+        if '(' in name:
+            clean_name = name.split('(')[0].strip().lower()
+        else:
+            clean_name = name.strip().lower()
+        if clean_name not in self._functions:
+            raise ValueError(f"Derivate Error: Function '{clean_name}' not found in context.")
+
+        if clean_name not in self._functions:
+            raise ValueError(f"Derivate Error: No function '{name}' not found in context.")
+
+        func_data = self._functions[clean_name]
+        param = func_data["parameter"]
+        tokens = func_data["tokens"]
+
+        parser = MathParser(tokens, self, allow_unbound=True)
+        monomials = parser.parse_expression()
+        if parser.peek() is not None:
+            raise ValueError(f"Syntax Error: Unexpected token '{parser.peek()}' in function definition.")
+
+        derived_monomials = []
+        for m in monomials:
+            if m.power > 0:
+                new_coeff = m.coefficient * m.power
+                derived_monomials.append(Monomial(new_coeff, m.variable, m.power - 1))
+                
+        if not derived_monomials:
+            derived_monomials = [Monomial(Rational(0))]
+            
+        compressed = parser.compress_monomials(derived_monomials)
+        
+        base_expr = "".join(str(t) for t in tokens)
+        
+        derived_parts = []
+        for m in compressed:
+            m_str = str(m)
+            derived_parts.append(m_str)
+            
+        derived_expr = " + ".join(derived_parts).replace("+ -", "- ")
+        if not derived_expr:
+            derived_expr = "0"
+            
+        return base_expr, param, derived_expr
+    
+
+    def display(self, prompt):
+        from .mathParser import MathParser
+        from .matrix import Matrix
+
+        x_val = np.linspace(-10, 10, 500)
+    
+        fig, ax = plt.subplots(figsize=(10, 6), dpi=100)
+        
+        names = prompt.split(' ')
+        functions_to_display = {}
+
+        for name in names:
+            if '(' in name:
+                clean_name = name.split('(')[0].strip().lower()
+            else:
+                clean_name = name.strip().lower()
+
+            if clean_name in self._functions:
+                functions_to_display[clean_name] = self._functions[clean_name]
+
+        for func_name, metadata in functions_to_display.items():
+            param = metadata['parameter']
+            tokens = metadata['tokens']
+            
+            try:
+                # 1. Parse and simplify the function expression
+                parser = MathParser(tokens, self, allow_unbound=True)
+                monomials = parser.parse_expression()
+                if parser.peek() is not None:
+                    raise ValueError(f"Syntax Error: Unexpected token '{parser.peek()}'")
+                
+                # 2. Evaluate the simplified monomials over x_val
+                y_val = np.zeros_like(x_val)
+                for m in monomials:
+                    coeff = m.coefficient
+                    if hasattr(coeff, 'imag'):  # ComplexRational
+                        if coeff.imag.num != 0:
+                            raise ValueError("Math Error: Cannot plot complex-valued functions with imaginary parts.")
+                        coeff = coeff.real
+                    if isinstance(coeff, Matrix):
+                        raise ValueError("Math Error: Cannot plot functions returning a Matrix.")
+                        
+                    if hasattr(coeff, 'num'):  # Rational
+                        coeff_val = float(coeff.num) / coeff.den
+                    else:
+                        coeff_val = float(coeff)
+                    
+                    if m.variable is None or m.power == 0:
+                        y_val += coeff_val
+                    else:
+                        y_val += coeff_val * (x_val ** m.power)
+                
+                # 3. Construct a simplified expression string for the legend
+                simplified_parts = []
+                for m in monomials:
+                    simplified_parts.append(str(m))
+                simplified_expr = " + ".join(simplified_parts).replace("+ -", "- ")
+                if not simplified_expr:
+                    simplified_expr = "0"
+                
+                # 4. Generate dynamic line styles using formatting anchors
+                ax.plot(x_val, y_val, label=f"${func_name}({param}) = {simplified_expr}$", linewidth=2)
+                
+            except Exception as e:
+                print(f"[Runtime Error] Failed to evaluate function '{func_name}': {e}")
+                continue
+
+        # 5. Presentation Layer & Aesthetics
+        ax.axhline(0, color='black', linewidth=0.8, linestyle=':', alpha=0.5)
+        ax.axvline(0, color='black', linewidth=0.8, linestyle=':', alpha=0.5)
+        ax.grid(True, which='both', linestyle='--', alpha=0.4)
+        
+        ax.set_title('Dynamic Function Visualization Matrix', fontsize=12, fontweight='bold', pad=15)
+        ax.set_xlabel('Independent Input Variable (Unified Domain)', fontsize=10)
+        ax.set_ylabel('Calculated Range Outputs', fontsize=10)
+        
+        ax.legend(loc='best', frameon=True, facecolor='white')
+        plt.tight_layout()
+        
+        # Display non-blocking canvas element
+        plt.show()
+        
+
 
     def print_context(self):
         print("Constants:")

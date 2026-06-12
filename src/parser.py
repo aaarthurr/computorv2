@@ -47,7 +47,7 @@ def strip_and_check(equation_str: str, args) -> tuple[str, bool]:
         # No '?' present anywhere means this track targets a memory context write
         is_assignment = True
 
-    if re.search(r'[*/%^][*/%^]', cleaned):
+    if re.search(r'//|%%|\^\^|([*/%^])(?!\1)[*/%^]|\*{3,}', cleaned):
         raise ValueError("Syntax Error: Invalid operator sequence detected (e.g., multiple consecutive multiplication/division operators).")
 
     cleaned = re.sub(r'(?<!\*)\*{3,}(?!\*)', '**', cleaned) # Normalizes ***+ to **
@@ -85,7 +85,7 @@ def parse_free_form_equation(equation_str: str, args, context=None, is_assignmen
     if args.verbose:
         print("parser entered, starting regex tokenization...")
 
-    token_pattern = r'\d+\.\d+|\d+|[a-zA-Z]+|\*\*|=\?|[=+\-*^/%()[\];,]'
+    token_pattern = r'\d+\.\d+|\d+|[a-zA-Z]+|\*\*|=\?|[=+\-*^/%()[\];,!]'
     
     raw_tokens = re.findall(token_pattern, equation_str)
 
@@ -113,18 +113,18 @@ def parse_free_form_equation(equation_str: str, args, context=None, is_assignmen
             if not (is_assignment and i <= eq_index):
                 # 1. Digit followed by variable/alpha or parenthesized expression
                 # e.g., '2' followed by 'x', 'i', 'pi', or '('
-                if t1.replace('.', '', 1).isdigit() and (t2.isalpha() or t2 == '('):
+                if t1.replace('.', '', 1).isdigit() and (t2.isalpha() or t2 == '(' or t2 == '['):
                     insert_star = True
                 
                 # 2. Variable/alpha followed by parenthesized expression (unless it's a function call)
                 # e.g., 'x' followed by '('
-                elif t1.isalpha() and t2 == '(':
+                elif t1.isalpha() and (t2 == '(' or t2 == '['):
                     if not is_function(t1):
                         insert_star = True
                 
                 # 3. Close parenthesis followed by digit, alpha, or open parenthesis
                 # e.g., ')' followed by '2', 'x', or '('
-                elif t1 == ')' and (t2.replace('.', '', 1).isdigit() or t2.isalpha() or t2 == '('):
+                elif (t1 == ')' or t1 == ']') and (t2.replace('.', '', 1).isdigit() or t2.isalpha() or t2 == '(' or t2 == '['):
                     insert_star = True
                 
             if insert_star:
