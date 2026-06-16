@@ -72,9 +72,8 @@ def strip_and_check(equation_str: str, args) -> tuple[str, bool]:
         is_assignment = False  # Reclassify as non-assignment if no '=' is present
 
     if args.verbose:
-        GREEN = "\033[92m"
-        RESET = "\033[0m"
-        print(GREEN + "Stripping complete : " + RESET + cleaned + f" | Is Assignment: {is_assignment}")
+        from .utils import tc
+        print(f"{tc.GREEN}Stripping complete : {tc.RESET}{cleaned} | Is Assignment: {is_assignment}")
 
     return cleaned, is_assignment
 
@@ -85,7 +84,7 @@ def parse_free_form_equation(equation_str: str, args, context=None, is_assignmen
     if args.verbose:
         print("parser entered, starting regex tokenization...")
 
-    token_pattern = r'\d+\.\d+|\d+|[a-zA-Z]+|\*\*|=\?|[=+\-*^/%()[\];,!]'
+    token_pattern = r'\d*\.\d+|\d+|[a-zA-Z]+|\*\*|=\?|[=+\-*^/%()[\];,!]'
     
     raw_tokens = re.findall(token_pattern, equation_str)
 

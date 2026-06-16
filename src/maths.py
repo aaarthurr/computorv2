@@ -5,7 +5,7 @@ from .number import Rational, ComplexRational
 from .runtimeContext import RuntimeContext
 from .mathParser import MathParser
 from .monomial import Monomial
-from .utils import format_rational, format_complex, exact_or_float_sqrt
+from .utils import format_rational, format_complex, exact_or_float_sqrt, pretty_print, tc
 
 
 
@@ -38,7 +38,7 @@ def basic_solve(lhs, context: RuntimeContext, args):
     else:
         clean_value = resolved_value
         
-    print(clean_value)
+    print(f"{tc.BOLD}{clean_value}{tc.RESET}")
     return
 
 def boolean_solve(lhs, rhs, context: RuntimeContext, args):
@@ -60,9 +60,9 @@ def boolean_solve(lhs, rhs, context: RuntimeContext, args):
     rhs_coeff = rhs_val[0].coefficient if (len(rhs_val) == 1 and rhs_val[0].is_constant()) else rhs_val
     
     if lhs_coeff == rhs_coeff:
-        print("true")
+        print(f"{tc.BOLD}{tc.WHITE}true{tc.RESET}")
     else:
-        print("false")
+        print(f"{tc.BOLD}{tc.WHITE}false{tc.RESET}")
     return
 
 def solve(tokens: list, context: RuntimeContext, args):
@@ -144,7 +144,7 @@ def assign(tokens: list, context: RuntimeContext, args) -> None:
         context.store_variable(var_name, clean_value)
         
         # Print the clean, formatted scalar value to console
-        print(clean_value)
+        print(f"{tc.BOLD}{clean_value}{tc.RESET}")
         return
 
     # 3. Track B: Function Assignment (LHS must match the 'name(param)' signature pattern)
@@ -165,7 +165,7 @@ def assign(tokens: list, context: RuntimeContext, args) -> None:
         context.store_function(func_name, param_name, rhs_tokens)
         
         # Print confirmation layout mapping matching subject expectations
-        print(f"Stored template: {func_name}({param_name})")
+        pretty_print(rhs_tokens)
         return
 
     # 4. Catch-all for structural syntax chaos (e.g., '2 + 2 = x' or 'f(x) + 1 = y')

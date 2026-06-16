@@ -1,4 +1,4 @@
-from .utils import format_rational, format_complex, exact_or_float_sqrt
+from .utils import format_rational, format_complex, exact_or_float_sqrt, tc
 from .monomial import Monomial
 from .mathParser import MathParser
 from .runtimeContext import RuntimeContext
@@ -72,9 +72,9 @@ def parse_and_split_polynomial(rhs, lhs, unbound_vars: set, context: RuntimeCont
 def solve_degree_zero(poly: dict):
     coef_zero = poly.get(0, Rational(0))
     if coef_zero.num == 0:
-        print("All real numbers are solutions.")
+        print(f"{tc.BOLD}{tc.GREEN}All real numbers are solutions.{tc.RESET}")
     else:
-        print("No solution.")
+        print(f"{tc.BOLD}{tc.RED}No solution.{tc.RESET}")
 
 
 def solve_degree_one(poly: dict, var_name: str):
@@ -83,7 +83,7 @@ def solve_degree_one(poly: dict, var_name: str):
     c = poly.get(0, Rational(0))
     sol = -c / b
     # print("The solution is:")
-    print(f"{var_name} = {format_rational(sol)}")
+    print(f"{tc.BOLD}{var_name} = {format_rational(sol)}{tc.RESET}")
 
 
 def solve_degree_two(poly: dict, var_name: str):
@@ -91,6 +91,20 @@ def solve_degree_two(poly: dict, var_name: str):
     a = poly.get(2, Rational(0))
     b = poly.get(1, Rational(0))
     c = poly.get(0, Rational(0))
+
+    coeffs = [a, b, c]
+    normalized_coeffs = []
+    for coef in coeffs:
+        if isinstance(coef, ComplexRational):
+            if coef.imag.num != 0:
+                raise ValueError("Math Error: Solving quadratic equations with complex coefficients is not supported.")
+            normalized_coeffs.append(coef.real)
+        else:
+            normalized_coeffs.append(coef)
+    
+
+                
+    a, b, c = normalized_coeffs
     
     # Discriminant
     disc = b*b - 4*a*c
@@ -104,19 +118,19 @@ def solve_degree_two(poly: dict, var_name: str):
         if is_perfect:
             sol1 = (-b - sqrt_disc) / denom
             sol2 = (-b + sqrt_disc) / denom
-            print(f"{var_name}1 = {format_rational(sol1)}")
-            print(f"{var_name}2 = {format_rational(sol2)}")
+            print(f"{tc.BOLD}{var_name}1 = {format_rational(sol1)}{tc.RESET}")
+            print(f"{tc.BOLD}{var_name}2 = {format_rational(sol2)}{tc.RESET}")
         else:
             # Inexact float solutions
             sol1_float = (-float(b.num)/float(b.den) - sqrt_disc) / (2 * float(a.num)/float(a.den))
             sol2_float = (-float(b.num)/float(b.den) + sqrt_disc) / (2 * float(a.num)/float(a.den))
-            print(f"{var_name}1 ≃ {sol1_float:g}")
-            print(f"{var_name}2 ≃ {sol2_float:g}")
+            print(f"{tc.BOLD}{var_name}1 ≃ {sol1_float:g}{tc.RESET}")
+            print(f"{tc.BOLD}{var_name}2 ≃ {sol2_float:g}{tc.RESET}")
             
     elif disc.num == 0:
         #print("Discriminant is zero, the solution is:")
         sol = -b / (2 * a)
-        print(f"{var_name} = {format_rational(sol)}")
+        print(f"{tc.BOLD}{var_name} = {format_rational(sol)}{tc.RESET}")
         
     else:
         #print("Discriminant is strictly negative, the two complex solutions are:")
@@ -128,15 +142,15 @@ def solve_degree_two(poly: dict, var_name: str):
             # Exact ComplexRational representation
             sol1 = ComplexRational(real_part, -imag_part_float / (2 * a))
             sol2 = ComplexRational(real_part, imag_part_float / (2 * a))
-            print(f"{var_name}1 = {format_complex(sol1)}")
-            print(f"{var_name}2 = {format_complex(sol2)}")
+            print(f"{tc.BOLD}{var_name}1 = {format_complex(sol1)}{tc.RESET}")
+            print(f"{tc.BOLD}{var_name}2 = {format_complex(sol2)}{tc.RESET}")
         else:
             # Inexact ComplexRational representation
             denom_float = 2 * float(a.num)/float(a.den)
             real_float = -float(b.num)/float(b.den) / denom_float
             imag_float = imag_part_float / denom_float
-            print(f"{var_name}1 ≃ {real_float:g} - {imag_float:g}i")
-            print(f"{var_name}2 ≃ {real_float:g} + {imag_float:g}i")
+            print(f"{tc.BOLD}{var_name}1 ≃ {real_float:g} - {imag_float:g}i{tc.RESET}")
+            print(f"{tc.BOLD}{var_name}2 ≃ {real_float:g} + {imag_float:g}i{tc.RESET}")
 
 
 def solve_polynomial(rhs, lhs, unbound_vars: set, var_name: str, context: RuntimeContext, args):

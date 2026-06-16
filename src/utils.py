@@ -2,6 +2,20 @@ import math
 from .number import Rational, ComplexRational
 from .monomial import Monomial
 
+class tc:
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    BLUE = "\033[34m"
+    MAGENTA = "\033[35m"
+    CYAN = "\033[36m"
+    WHITE = "\033[37m"
+
+    # Interface Accents
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    UNDERLINE = "\033[4m"
+
 
 active_display_mode = 'auto'
 
@@ -72,3 +86,48 @@ def exact_or_float_sqrt(r: Rational) -> tuple[Rational | float, bool]:
     if n_sqrt * n_sqrt == r.num and d_sqrt * d_sqrt == r.den:
         return Rational(n_sqrt, d_sqrt), True
     return math.sqrt(r.num / r.den), False
+
+
+def pretty_print(tokens, print_output: bool = True) -> str:
+    if not tokens:
+        return ""
+        
+    result = []
+    n = len(tokens)
+    builtins = {"sqrt", "cbrt", "log", "ln", "exp", "sin", "cos", "tan", "abs"}
+    
+    for i in range(n):
+        current = str(tokens[i])
+        
+        next_token = str(tokens[i + 1]) if i + 1 < n else None
+        prev_token = str(tokens[i - 1]) if i > 0 else None
+        
+        if current == '^':
+            continue
+        if prev_token == '^':
+            result[-1] = f"{result[-1]}^{current}"
+            continue
+            
+        # Check if the next token is a variable name to strip spacing around multiplication
+        is_next_var = False
+        if next_token and next_token.isalpha() and next_token.lower() not in builtins:
+            is_next_var = True
+            
+        if current == '*' and is_next_var:
+            if result:
+                result[-1] = result[-1].rstrip()
+            result.append(f"*{next_token}")
+            continue
+            
+        if current.isalpha() and current.lower() not in builtins and prev_token == '*':
+            continue
+            
+        if current in ('+', '-'):
+            result.append(f" {current} ")
+        else:
+            result.append(current)
+
+    formatted_str = "".join(result).strip()
+    if print_output:
+        print(f"{tc.CYAN}{formatted_str}{tc.RESET}")
+    return formatted_str

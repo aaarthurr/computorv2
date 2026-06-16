@@ -24,8 +24,7 @@ class Rational:
         """
         if '.' in value:
             integer_part, decimal_part = value.split('.')
-            # Calculate the denominator based on the number of decimal places
-            # e.g., .123 means denominator is 1000 (10^3)
+
             denominator = 10 ** len(decimal_part)
             numerator = int(integer_part + decimal_part)
             return cls(numerator, denominator)

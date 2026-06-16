@@ -9,6 +9,7 @@ from src.maths import solve, assign
 
 from src.number import Rational, ComplexRational
 from src.runtimeContext import RuntimeContext
+from src.utils import tc
 
 override_options = ["context", "delete", "derivate", "curv", "display", "transpose", "inverse", "determinant", "norm"]
 passive_options = ["rad", "frac", "dec"]
@@ -41,21 +42,21 @@ def catch_override_options(tags_list: list[str], prompt: str) -> bool:
             
         case "delete":
             if not sanitized_prompt:
-                print("Error: Delete command requires a valid identifier name.")
+                print(f"{tc.BOLD}{tc.RED}Error: Delete command requires a valid identifier name.{tc.RESET}")
                 return True
                 
             if context.remove(sanitized_prompt):
-                print(f"Deleted '{sanitized_prompt}' from memory.")
+                print(f"{tc.GREEN}Deleted '{sanitized_prompt}' from memory.{tc.RESET}")
             else:
-                print(f"Error: '{sanitized_prompt}' not found in memory (or is protected).")
+                print(f"{tc.BOLD}{tc.RED}Error: '{sanitized_prompt}' not found in memory (or is protected).{tc.RESET}")
             return True
             
         case "derivate":
             try:
                 base_expr, param, derived_expr = context.derivate(sanitized_prompt)
-                print(f"Derivate of {base_expr} with respect to {param} is: {derived_expr}")
+                print(f"Derivate of {tc.BOLD}{base_expr}{tc.RESET} with respect to {tc.BOLD}{param}{tc.RESET} is: {tc.BOLD}{tc.GREEN}{derived_expr}{tc.RESET}")
             except ValueError as e:
-                print(f"Syntax Error parsing derivation arguments: {e}")
+                print(f"{tc.BOLD}{tc.RED}Syntax Error parsing derivation arguments: {e}{tc.RESET}")
             return True
             
         case "curv":
@@ -108,14 +109,14 @@ if __name__ == "__main__":
     context = RuntimeContext()
 
     if args.verbose:
-        print(UNDERLINE + GREEN+ "\n--- VERBOSE MODE --- \n\n" + RESET)
+        print(f"{tc.UNDERLINE}{tc.GREEN}\n--- VERBOSE MODE --- \n\n{tc.RESET}")
 
     while True:
         try:
-            prompt = input("> ")
+            prompt = input(f"{tc.BOLD}{tc.CYAN}> {tc.RESET}")
 
             if prompt.lower() in {"exit", "quit"}:
-                print("Exiting...")
+                print(f"{tc.BOLD}{tc.YELLOW}Exiting...{tc.RESET}")
                 break
 
             prompt, tags = get_options(prompt)
@@ -146,7 +147,7 @@ if __name__ == "__main__":
                 assign(tokens_list, context, args)
 
         except (EOFError, KeyboardInterrupt):
-            print("\nExiting...")
+            print(f"\n{tc.BOLD}{tc.YELLOW}Exiting...{tc.RESET}")
             break
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"{tc.BOLD}{tc.RED}Error: {e}{tc.RESET}")

@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import copy
 
+from .utils import tc
+
 class RuntimeContext:
     """
     Manages symbol tables with built-in transcendental constants and functions.
@@ -141,36 +143,6 @@ class RuntimeContext:
             "tokens": list(rhs_tokens)
         }
 
-    def evaluate_function_call(self, func_name: str) -> list:
-        """Executes built-in callbacks or substitutes user templates."""
-        func_data = self.context.lookup_function(func_name)
-        if func_data is None:
-            raise ValueError(f"Runtime Error: Function '{func_name}' is not defined.")
-
-        self.consume() # Eat '('
-        argument_monomials = self.parse_expression() # Solve the inside math first
-        self.consume() # Eat ')'
-
-        if func_data["type"] == "BUILTIN":
-            # SECURITY CHECK: Prevent passing variables into Python math functions
-            # The argument must collapse down to exactly one purely constant chunk
-            if len(argument_monomials) != 1 or not argument_monomials[0].is_constant():
-                raise ValueError(
-                    f"Math Error: Cannot evaluate built-in function '{func_name}' with an unresolved variable. "
-                    "This engine only solves polynomial equations up to degree 2, not transcendental equations."
-                )
-            
-            # Now it's 100% safe to extract the number and run Python math
-            raw_val = argument_monomials[0].coefficient 
-            result = func_data["callback"](raw_val)
-            
-            return [Monomial(coefficient=result)]
-            
-        else:
-            # User defined function substitution logic...
-            pass
-    
-
     def remove(self, name: str) -> bool:
         clean = name.lower()
         deleted = False
@@ -186,7 +158,6 @@ class RuntimeContext:
             deleted = True
             
         return deleted
-
 
     def derivate(self, name) -> dict:
 
@@ -224,7 +195,8 @@ class RuntimeContext:
             
         compressed = parser.compress_monomials(derived_monomials)
         
-        base_expr = "".join(str(t) for t in tokens)
+        from .utils import pretty_print
+        base_expr = pretty_print(tokens, print_output=False)
         
         derived_parts = []
         for m in compressed:
@@ -236,7 +208,6 @@ class RuntimeContext:
             derived_expr = "0"
             
         return base_expr, param, derived_expr
-    
         
     def analyze(self, name) -> dict:
         from .mathParser import MathParser
@@ -311,10 +282,11 @@ class RuntimeContext:
         extremum = "Minimum" if a > 0 else "Maximum"
         direction = "upwards" if a > 0 else "downwards"
 
-        print("\n--- Curve Analysis ---")
-        print(f"The parabola opens {direction}.")
-        print(f"The derivative is 0 at X = {x_vertex:g}")
-        print(f"The vertex is a {extremum} at coordinates: ({x_vertex:g}, {y_vertex:g})")
+        from .utils import tc
+        print(f"\n{tc.BOLD}{tc.YELLOW}--- Curve Analysis ---{tc.RESET}")
+        print(f"The parabola opens {tc.BOLD}{direction}{tc.RESET}.")
+        print(f"The derivative is 0 at X = {tc.BOLD}{x_vertex:g}{tc.RESET}")
+        print(f"The vertex is a {tc.BOLD}{extremum}{tc.RESET} at coordinates: ({tc.BOLD}{x_vertex:g}{tc.RESET}, {tc.BOLD}{y_vertex:g}{tc.RESET})")
 
         return {
             "direction": direction,
@@ -322,11 +294,7 @@ class RuntimeContext:
             "y_vertex": y_vertex,
             "extremum": extremum
         }
-
-
-         
-
-        
+    
     def display(self, prompt):
         from .mathParser import MathParser
         from .matrix import Matrix
@@ -418,27 +386,25 @@ class RuntimeContext:
         # Display non-blocking canvas element
         plt.show()
         
-
     def print_context(self):
-        print("Constants:")
+        from .utils import pretty_print, tc
+        
+        print(f"{tc.BOLD}{tc.YELLOW}Constants:{tc.RESET}")
         for const_name, value in self._immutable_constants.items():
-            print(f"  {const_name} = {value}")
-        print("Built-in Functions:")
+            print(f"  {tc.CYAN}{const_name}{tc.RESET} = {tc.BOLD}{value}{tc.RESET}")
+        print(f"{tc.BOLD}{tc.YELLOW}Built-in Functions:{tc.RESET}")
         for func_name, func_data in self._builtins.items():
-            print(f"  {func_name}")
+            print(f"  {tc.BLUE}{func_name}{tc.RESET}")
 
         print("-------------------------")
-        print("Variables:")
+        print(f"{tc.BOLD}{tc.YELLOW}Variables:{tc.RESET}")
         for var_name, value in self._variables.items():
-            print(f"  {var_name} = {value}")
+            print(f"  {tc.MAGENTA}{var_name}{tc.RESET} = {tc.BOLD}{pretty_print([value], print_output=False)}{tc.RESET}")
 
-
-        print("Functions:")
+        print(f"{tc.BOLD}{tc.YELLOW}Functions:{tc.RESET}")
         for func_name, func_data in self._functions.items():
-            tokens_str = "".join(str(t) for t in func_data["tokens"])
-            print(f"  {func_name}({func_data['parameter']}) = {tokens_str}")
-
-
+            tokens_str = pretty_print(func_data["tokens"], print_output=False)
+            print(f"  {tc.GREEN}{func_name}{tc.RESET}({tc.BOLD}{func_data['parameter']}{tc.RESET}) = {tc.BOLD}{tokens_str}{tc.RESET}")
 
     def transpose(self, name):
         from .matrix import Matrix
@@ -451,13 +417,15 @@ class RuntimeContext:
         
         if matrix is None or not isinstance(matrix, Matrix):
             raise ValueError(f"Variable '{names[0]}' is not a matrix or does not exist in context.")
+        from .utils import tc
         transposed_matrix = matrix.transpose()
 
-        print(transposed_matrix)
+        print(f"{tc.BOLD}{tc.GREEN}{transposed_matrix}{tc.RESET}")
         return transposed_matrix
     
     def inverse(self, name):
         from .matrix import Matrix
+        from .utils import tc
 
         names = name.split(' ')
         if names and len(names) > 1:
@@ -469,11 +437,12 @@ class RuntimeContext:
             raise ValueError(f"Variable '{names[0]}' is not a matrix or does not exist in context.")
         inverted_matrix = matrix.inverse()
 
-        print(inverted_matrix)
+        print(f"{tc.BOLD}{tc.GREEN}{inverted_matrix}{tc.RESET}")
         return inverted_matrix
 
     def determinant(self, name):
         from .matrix import Matrix
+        from .utils import tc
 
         names = name.split(' ')
         if names and len(names) > 1:
@@ -485,12 +454,12 @@ class RuntimeContext:
             raise ValueError(f"Variable '{names[0]}' is not a matrix or does not exist in context.")
         det_value = matrix.determinant()
 
-        print(f"Determinant of {names[0]}: {det_value}")
+        print(f"Determinant of {tc.BOLD}{names[0]}{tc.RESET}: {tc.BOLD}{tc.GREEN}{det_value}{tc.RESET}")
         return det_value
-
 
     def norm(self, name):
         from .matrix import Matrix
+        from .utils import tc
 
         names = name.split(' ')
         if names and len(names) > 1:
@@ -503,7 +472,7 @@ class RuntimeContext:
         norm_value = matrix.norm()
 
         if "L2" in norm_value:
-            print(f"Vector Norms of {names[0]}: L1={norm_value['L1']}, L2={norm_value['L2']}, Linf={norm_value['Linf']}")
+            print(f"Vector Norms of {tc.BOLD}{names[0]}{tc.RESET}: L1={tc.BOLD}{norm_value['L1']}{tc.RESET}, L2={tc.BOLD}{tc.GREEN}{norm_value['L2']}{tc.RESET}, Linf={tc.BOLD}{norm_value['Linf']}{tc.RESET}")
         else:
-            print(f"Matrix Norms of {names[0]}: L1 (column sum)={norm_value['L1']}, Linf (row sum)={norm_value['Linf']}, Frobenius={norm_value['Frobenius']}")
+            print(f"Matrix Norms of {tc.BOLD}{names[0]}{tc.RESET}: L1 (column sum)={tc.BOLD}{norm_value['L1']}{tc.RESET}, Linf (row sum)={tc.BOLD}{norm_value['Linf']}{tc.RESET}, Frobenius={tc.BOLD}{tc.GREEN}{norm_value['Frobenius']}{tc.RESET}")
         return norm_value
