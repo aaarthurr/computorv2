@@ -142,6 +142,42 @@ class Rational:
             return self.num == other.num and self.den == other.den
         return False
 
+    def __lt__(self, other):
+        if isinstance(other, int):
+            return self.num < other * self.den
+        if isinstance(other, float):
+            return float(self.num) / self.den < other
+        if isinstance(other, Rational):
+            return self.num * other.den < other.num * self.den
+        return NotImplemented
+
+    def __le__(self, other):
+        if isinstance(other, int):
+            return self.num <= other * self.den
+        if isinstance(other, float):
+            return float(self.num) / self.den <= other
+        if isinstance(other, Rational):
+            return self.num * other.den <= other.num * self.den
+        return NotImplemented
+
+    def __gt__(self, other):
+        if isinstance(other, int):
+            return self.num > other * self.den
+        if isinstance(other, float):
+            return float(self.num) / self.den > other
+        if isinstance(other, Rational):
+            return self.num * other.den > other.num * self.den
+        return NotImplemented
+
+    def __ge__(self, other):
+        if isinstance(other, int):
+            return self.num >= other * self.den
+        if isinstance(other, float):
+            return float(self.num) / self.den >= other
+        if isinstance(other, Rational):
+            return self.num * other.den >= other.num * self.den
+        return NotImplemented
+
     def __abs__(self):
         """
         Required because ComplexRational's __repr__ calls abs(self.imag).
@@ -265,3 +301,9 @@ class ComplexRational:
     def __str__(self):
         from .utils import format_complex
         return format_complex(self)
+
+    def __abs__(self):
+        from .utils import exact_or_float_sqrt
+        magnitude_sq = self.real ** 2 + self.imag ** 2
+        res, is_exact = exact_or_float_sqrt(magnitude_sq)
+        return res

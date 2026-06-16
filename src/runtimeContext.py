@@ -10,6 +10,12 @@ class RuntimeContext:
     """
     def __init__(self):
         # Seed core un-writeable system values
+        self._angle_type = "deg"  # Default angle type for trigonometric functions
+
+        self._display_type = "default"  # Default display type for output formatting
+        from .utils import set_active_display_mode
+        set_active_display_mode("default")
+
         self._immutable_constants = {
             "pi": 3.141592653589793,
             "phi": 1.618033988749895,
@@ -23,15 +29,31 @@ class RuntimeContext:
             "log": math.log10,
             "ln": math.log,
             "exp": math.exp,
-            "sin": lambda x: math.sin(math.radians(x)),
-            "cos": lambda x: math.cos(math.radians(x)),
-            "tan": lambda x: math.tan(math.radians(x)),
+            "sin": lambda x: math.sin(math.radians(x) if self._angle_type == "deg" else x),
+            "cos": lambda x: math.cos(math.radians(x) if self._angle_type == "deg" else x),
+            "tan": lambda x: math.tan(math.radians(x) if self._angle_type == "deg" else x),
             "abs": abs
         }
 
         # User-allocated space tables
         self._variables = {}
         self._functions = {}
+
+    def set_to_rad(self) -> None:
+        self._angle_type = "rad"
+
+    def set_to_deg(self) -> None:
+        self._angle_type = "deg"
+
+    def set_to_frac(self) -> None:
+        self._display_type = "frac"
+        from .utils import set_active_display_mode
+        set_active_display_mode("frac")
+    
+    def set_to_dec(self) -> None:
+        self._display_type = "dec"
+        from .utils import set_active_display_mode
+        set_active_display_mode("dec")
 
     def is_reserved_name(self, name: str) -> bool:
         clean = name.lower()
@@ -178,11 +200,9 @@ class RuntimeContext:
             clean_name = name.split('(')[0].strip().lower()
         else:
             clean_name = name.strip().lower()
-        if clean_name not in self._functions:
-            raise ValueError(f"Derivate Error: Function '{clean_name}' not found in context.")
 
         if clean_name not in self._functions:
-            raise ValueError(f"Derivate Error: No function '{name}' not found in context.")
+            raise ValueError(f"Function '{clean_name}' not found in context.")
 
         func_data = self._functions[clean_name]
         param = func_data["parameter"]
@@ -191,7 +211,7 @@ class RuntimeContext:
         parser = MathParser(tokens, self, allow_unbound=True)
         monomials = parser.parse_expression()
         if parser.peek() is not None:
-            raise ValueError(f"Syntax Error: Unexpected token '{parser.peek()}' in function definition.")
+            raise ValueError(f"Unexpected token '{parser.peek()}' in function definition.")
 
         derived_monomials = []
         for m in monomials:
@@ -217,15 +237,101 @@ class RuntimeContext:
             
         return base_expr, param, derived_expr
     
+        
+    def analyze(self, name) -> dict:
+        from .mathParser import MathParser
+        from .monomial import Monomial
+        from .number import Rational
 
+        if '(' in name:
+            clean_name = name.split('(')[0].strip().lower()
+        else:
+            clean_name = name.strip().lower()
+            
+        if clean_name not in self._functions:
+            raise ValueError(f"Function '{clean_name}' not found in context.")
+
+        # 1. Retrieve original monomials to build original poly coefficients
+        func_data = self._functions[clean_name]
+        tokens = func_data["tokens"]
+        param = func_data["parameter"]
+
+        parser = MathParser(tokens, self, allow_unbound=True)
+        monomials = parser.parse_expression()
+        if parser.peek() is not None:
+            raise ValueError(f"Syntax Error: Unexpected token '{parser.peek()}'")
+
+        poly = {}
+        for m in monomials:
+            coeff = m.coefficient
+            if hasattr(coeff, 'imag') and coeff.imag.num != 0:
+                raise ValueError("Cannot analyze functions with complex coefficients.")
+            from .matrix import Matrix
+            if isinstance(coeff, Matrix):
+                raise ValueError("Cannot analyze functions returning matrices.")
+            
+            if hasattr(coeff, 'num'):
+                val = float(coeff.num) / coeff.den
+            else:
+                val = float(coeff)
+            
+            if m.variable is None or m.variable == param:
+                poly[m.power] = val
+
+        a = poly.get(2, 0.0)
+        has_higher_degree = any(pwr > 2 for pwr in poly.keys())
+        if a == 0 or has_higher_degree:
+            raise ValueError("Curve analysis is only supported for quadratic (degree 2) functions.")
+
+        # 2. Call self.derivate as requested to calculate the information
+        base_expr, param_name, derived_expr = self.derivate(clean_name)
+
+        # 3. Build derived_poly from the coefficients of original poly
+        derived_poly = {}
+        for pwr, val in poly.items():
+            if pwr > 0:
+                derived_poly[pwr - 1] = val * pwr
+
+        d_x = derived_poly.get(1, 0.0)
+        d_c = derived_poly.get(0, 0.0)
+        
+        if d_x == 0:
+            raise ValueError("Curve analysis is only supported for quadratic (degree 2) functions.")
+
+        x_vertex = -d_c / d_x
+        
+        def eval_poly(p, x):
+            res = 0.0
+            for pwr, coeff in p.items():
+                res += coeff * (x ** pwr)
+            return res
+
+        y_vertex = eval_poly(poly, x_vertex)
+        
+        extremum = "Minimum" if a > 0 else "Maximum"
+        direction = "upwards" if a > 0 else "downwards"
+
+        print("\n--- Curve Analysis ---")
+        print(f"The parabola opens {direction}.")
+        print(f"The derivative is 0 at X = {x_vertex:g}")
+        print(f"The vertex is a {extremum} at coordinates: ({x_vertex:g}, {y_vertex:g})")
+
+        return {
+            "direction": direction,
+            "x_vertex": x_vertex,
+            "y_vertex": y_vertex,
+            "extremum": extremum
+        }
+
+
+         
+
+        
     def display(self, prompt):
         from .mathParser import MathParser
         from .matrix import Matrix
 
-        x_val = np.linspace(-10, 10, 500)
-    
-        fig, ax = plt.subplots(figsize=(10, 6), dpi=100)
-        
+        error_names = []
         names = prompt.split(' ')
         functions_to_display = {}
 
@@ -237,7 +343,19 @@ class RuntimeContext:
 
             if clean_name in self._functions:
                 functions_to_display[clean_name] = self._functions[clean_name]
-
+            else:
+                error_names.append(name)
+        
+        if error_names and functions_to_display:
+            print(f"Warning: The following functions are not registered in the context: {', '.join(error_names)}. Please register a function before using #display.")
+        
+        if not functions_to_display:
+            raise ValueError("No valid functions found to display.")
+        
+        x_val = np.linspace(-40, 40, 500)
+    
+        fig, ax = plt.subplots(figsize=(10, 6), dpi=100)
+        
         for func_name, metadata in functions_to_display.items():
             param = metadata['parameter']
             tokens = metadata['tokens']
@@ -301,7 +419,6 @@ class RuntimeContext:
         plt.show()
         
 
-
     def print_context(self):
         print("Constants:")
         for const_name, value in self._immutable_constants.items():
@@ -320,3 +437,73 @@ class RuntimeContext:
         for func_name, func_data in self._functions.items():
             tokens_str = "".join(str(t) for t in func_data["tokens"])
             print(f"  {func_name}({func_data['parameter']}) = {tokens_str}")
+
+
+
+    def transpose(self, name):
+        from .matrix import Matrix
+
+        names = name.split(' ')
+        if names and len(names) > 1:
+            raise ValueError("Only one matrix can be transposed at a time.")
+        clean_name = names[0].strip().lower()
+        matrix = self.lookup_variable(clean_name)
+        
+        if matrix is None or not isinstance(matrix, Matrix):
+            raise ValueError(f"Variable '{names[0]}' is not a matrix or does not exist in context.")
+        transposed_matrix = matrix.transpose()
+
+        print(transposed_matrix)
+        return transposed_matrix
+    
+    def inverse(self, name):
+        from .matrix import Matrix
+
+        names = name.split(' ')
+        if names and len(names) > 1:
+            raise ValueError("Only one matrix can be inverted at a time.")
+        clean_name = names[0].strip().lower()
+        matrix = self.lookup_variable(clean_name)
+        
+        if matrix is None or not isinstance(matrix, Matrix):
+            raise ValueError(f"Variable '{names[0]}' is not a matrix or does not exist in context.")
+        inverted_matrix = matrix.inverse()
+
+        print(inverted_matrix)
+        return inverted_matrix
+
+    def determinant(self, name):
+        from .matrix import Matrix
+
+        names = name.split(' ')
+        if names and len(names) > 1:
+            raise ValueError("Only one matrix can be evaluated for determinant at a time.")
+        clean_name = names[0].strip().lower()
+        matrix = self.lookup_variable(clean_name)
+        
+        if matrix is None or not isinstance(matrix, Matrix):
+            raise ValueError(f"Variable '{names[0]}' is not a matrix or does not exist in context.")
+        det_value = matrix.determinant()
+
+        print(f"Determinant of {names[0]}: {det_value}")
+        return det_value
+
+
+    def norm(self, name):
+        from .matrix import Matrix
+
+        names = name.split(' ')
+        if names and len(names) > 1:
+            raise ValueError("Only one matrix/vector can be evaluated for norm at a time.")
+        clean_name = names[0].strip().lower()
+        matrix = self.lookup_variable(clean_name)
+        
+        if matrix is None or not isinstance(matrix, Matrix):
+            raise ValueError(f"Variable '{names[0]}' is not a matrix or vector, or does not exist in context.")
+        norm_value = matrix.norm()
+
+        if "L2" in norm_value:
+            print(f"Vector Norms of {names[0]}: L1={norm_value['L1']}, L2={norm_value['L2']}, Linf={norm_value['Linf']}")
+        else:
+            print(f"Matrix Norms of {names[0]}: L1 (column sum)={norm_value['L1']}, Linf (row sum)={norm_value['Linf']}, Frobenius={norm_value['Frobenius']}")
+        return norm_value

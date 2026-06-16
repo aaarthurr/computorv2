@@ -10,7 +10,7 @@ from src.maths import solve, assign
 from src.number import Rational, ComplexRational
 from src.runtimeContext import RuntimeContext
 
-override_options = ["context", "delete", "derivate", "curv", "display"]
+override_options = ["context", "delete", "derivate", "curv", "display", "transpose", "inverse", "determinant", "norm"]
 passive_options = ["rad", "frac", "dec"]
 
 def parse_arguments():
@@ -20,38 +20,87 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def catch_override_options(tags_list, prompt):
-    tag = [t for t in tags_list if t in override_options]
-    if len(tag) > 1:
-        raise ValueError(f"Syntax Error: Multiple override options detected: {tag}. Only one of {override_options} can be used at a time.")
+def catch_override_options(tags_list: list[str], prompt: str) -> bool:
+    matched_tags = [t for t in tags_list if t in override_options]
     
-    if not tag:
+    if len(matched_tags) > 1:
+        raise ValueError(
+            f"Syntax Error: Multiple override options detected: {matched_tags}. "
+            f"Only one of {override_options} can be used at a time."
+        )
+    
+    if not matched_tags:
         return False
     
-    if tag[0] == "context":
-        context.print_context()
-        return True
-    if tag[0] == "delete":
-        name = prompt.strip()
-        if context.remove(name):
-            print(f"Deleted '{name}' from memory.")
-        else:
-            print(f"Error: '{name}' not found in memory (or is protected).")
-        return True
+    sanitized_prompt = prompt.strip()
     
-    if tag[0] == "derivate":
-        base_expr, param, derived_expr = context.derivate(prompt.strip())
-        print(f"Derivate of {base_expr} with respect to {param} is: {derived_expr}")
-        return True
+    match matched_tags[0]:
+        case "context":
+            context.print_context()
+            return True
+            
+        case "delete":
+            if not sanitized_prompt:
+                print("Error: Delete command requires a valid identifier name.")
+                return True
+                
+            if context.remove(sanitized_prompt):
+                print(f"Deleted '{sanitized_prompt}' from memory.")
+            else:
+                print(f"Error: '{sanitized_prompt}' not found in memory (or is protected).")
+            return True
+            
+        case "derivate":
+            try:
+                base_expr, param, derived_expr = context.derivate(sanitized_prompt)
+                print(f"Derivate of {base_expr} with respect to {param} is: {derived_expr}")
+            except ValueError as e:
+                print(f"Syntax Error parsing derivation arguments: {e}")
+            return True
+            
+        case "curv":
+            context.analyze(sanitized_prompt)
+            return True
+            
+        case "display":
+            context.display(sanitized_prompt)
+            return True
+
+        case "transpose":
+            context.transpose(sanitized_prompt)
+            return True
+
+        case "inverse":
+            context.inverse(sanitized_prompt)
+            return True
+        
+        case "determinant":
+            context.determinant(sanitized_prompt)
+            return True
+
+        case "norm":
+            context.norm(sanitized_prompt)
+            return True
+
+        case _:
+            return False
+
+
+def catch_passive_options(tags_list):
+    tag = [t for t in tags_list if t in passive_options]
+
+    if not tag:
+        return None
+
+    for t in tag:
+        if t == "rad":
+            context.set_to_rad()
+        elif t == "frac":
+            context.set_to_frac()
+        elif t == "dec":
+            context.set_to_dec()
     
-    if tag[0] == "curv":
-        print("Curv option selected: This will compute the curvature of the current polynomial.")
-        return True
-    
-    if tag[0] == "display":
-        context.display(prompt.strip())
-        return True
-    return False
+    return tag[0]
 
 if __name__ == "__main__":
     args = parse_arguments()
@@ -71,9 +120,15 @@ if __name__ == "__main__":
 
             prompt, tags = get_options(prompt)
 
-            catched =catch_override_options(tags, prompt)
+            for t in tags:
+                if t not in override_options and t not in passive_options:
+                    raise ValueError(f"Unknown option '{t}' detected. Valid options are: {override_options + passive_options}.")
+
+            catched = catch_override_options(tags, prompt)
             if catched:
                 continue
+            
+            catch_passive_options(tags)
             
             prompt, is_assignment = strip_and_check(prompt, args)
 

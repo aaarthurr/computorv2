@@ -24,7 +24,6 @@ def evaluate_rhs_expression(tokens: list, context: RuntimeContext, args) -> list
 
     return resolved_monomial_list
 
-
 def basic_solve(lhs, context: RuntimeContext, args):
     # Evaluate LHS expression (Variables must be already bound, so allow_unbound=False)
     parser = MathParser(lhs, context, allow_unbound=False)
@@ -41,7 +40,6 @@ def basic_solve(lhs, context: RuntimeContext, args):
         
     print(clean_value)
     return
-
 
 def boolean_solve(lhs, rhs, context: RuntimeContext, args):
     # Evaluate Left Hand Side (allow_unbound=False)

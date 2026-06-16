@@ -3,7 +3,19 @@ from .number import Rational, ComplexRational
 from .monomial import Monomial
 
 
+active_display_mode = 'auto'
+
+def set_active_display_mode(mode: str) -> None:
+    global active_display_mode
+    if mode == 'default':
+        active_display_mode = 'auto'
+    elif mode in ('frac', 'dec', 'auto'):
+        active_display_mode = mode
+
 def format_rational(r: Rational, mode: str = 'auto') -> str:
+    if mode == 'auto':
+        mode = active_display_mode
+
     if r.den == 1:
         return str(r.num)
     
@@ -23,6 +35,9 @@ def format_rational(r: Rational, mode: str = 'auto') -> str:
     return dec_str
 
 def format_complex(c: ComplexRational, mode: str = 'auto') -> str:
+    if mode == 'auto':
+        mode = active_display_mode
+
     real_str = format_rational(c.real, mode)
     imag_str = format_rational(c.imag, mode)
     

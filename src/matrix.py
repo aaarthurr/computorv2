@@ -27,7 +27,7 @@ class Matrix:
 
     def __add__(self, other):
         if not isinstance(other, Matrix):
-            return NotImplemented
+            raise ValueError("Addition is only defined between two matrices.")
         if self.rows != other.rows or self.cols != other.cols:
             raise ValueError(f"Matrix Error: Addition dimension mismatch ({self.rows}x{self.cols} vs {other.rows}x{other.cols}).")
         
@@ -42,7 +42,7 @@ class Matrix:
 
     def __sub__(self, other):
         if not isinstance(other, Matrix):
-            return NotImplemented
+            raise ValueError("Subtraction is only defined between two matrices.")
         if self.rows != other.rows or self.cols != other.cols:
             raise ValueError(f"Matrix Error: Subtraction dimension mismatch ({self.rows}x{self.cols} vs {other.rows}x{other.cols}).")
         
@@ -54,7 +54,7 @@ class Matrix:
 
     def __rsub__(self, other):
         if not isinstance(other, Matrix):
-            return NotImplemented
+            raise ValueError("Subtraction is only defined between two matrices.")
         return other.__sub__(self)
 
     def __neg__(self):
@@ -145,7 +145,11 @@ class Matrix:
                 for i in range(self.rows)
             ]
             return Matrix(new_data)
-        return NotImplemented
+        raise ValueError("Division is only supported with a scalar divisor (int, Rational, or ComplexRational).")
+
+
+    def __rtruediv__(self, other):
+        raise ValueError("Math Error: Division of a scalar by a Matrix is not defined.")
 
     def __eq__(self, other):
         if not isinstance(other, Matrix):
@@ -176,3 +180,157 @@ class Matrix:
 
     def __repr__(self):
         return self.__str__()
+
+
+
+
+    def transpose(self):
+        new_data = [
+            [self.data[j][i] for j in range(self.rows)]
+            for i in range(self.cols)
+        ]
+        return Matrix(new_data)
+
+
+    def determinant(self):
+        if self.rows != self.cols:
+            raise ValueError("Determinant is only defined for square matrices.")
+        
+        import copy
+        data = copy.deepcopy(self.data)
+        n = self.rows
+        
+        has_complex = any(isinstance(x, ComplexRational) for row in data for x in row)
+        det = ComplexRational(Rational(1)) if has_complex else Rational(1)
+        
+        for i in range(n):
+            pivot_row = i
+            while pivot_row < n and data[pivot_row][i] == 0:
+                pivot_row += 1
+                
+            if pivot_row == n:
+                return ComplexRational(Rational(0)) if has_complex else Rational(0)
+                
+            if pivot_row != i:
+                data[i], data[pivot_row] = data[pivot_row], data[i]
+                det = -det
+                
+            for r in range(i + 1, n):
+                factor = data[r][i] / data[i][i]
+                for c in range(i, n):
+                    data[r][c] = data[r][c] - factor * data[i][c]
+                    
+            det = det * data[i][i]
+            
+        return det
+
+    def inverse(self):
+        if self.rows != self.cols:
+            raise ValueError("Matrix inverse is only defined for square matrices.")
+            
+        n = self.rows
+        import copy
+        data = copy.deepcopy(self.data)
+        
+        has_complex = any(isinstance(x, ComplexRational) for row in data for x in row)
+        one = ComplexRational(Rational(1)) if has_complex else Rational(1)
+        zero = ComplexRational(Rational(0)) if has_complex else Rational(0)
+        
+        aug = []
+        for i in range(n):
+            row_i = data[i] + [one if i == j else zero for j in range(n)]
+            aug.append(row_i)
+            
+        for i in range(n):
+            pivot_row = i
+            while pivot_row < n and aug[pivot_row][i] == 0:
+                pivot_row += 1
+                
+            if pivot_row == n:
+                raise ValueError("Matrix is singular and cannot be inverted.")
+                
+            if pivot_row != i:
+                aug[i], aug[pivot_row] = aug[pivot_row], aug[i]
+                
+            pivot_val = aug[i][i]
+            for c in range(i, 2 * n):
+                aug[i][c] = aug[i][c] / pivot_val
+                
+            for r in range(n):
+                if r != i:
+                    factor = aug[r][i]
+                    for c in range(i, 2 * n):
+                        aug[r][c] = aug[r][c] - factor * aug[i][c]
+                        
+        inv_data = [row[n:] for row in aug]
+        return Matrix(inv_data)
+
+
+    def vector_norm(self):
+        if self.rows > 1 and self.cols > 1:
+            raise ValueError("Matrix Error: Vector norm can only be computed on a 1xN or Nx1 matrix.")
+
+        if self.rows > 1:
+            vector = [self.data[i][0] for i in range(self.rows)]
+        else:
+            vector = self.data[0]
+
+        l1_norm = Rational(0)
+        l2_norm_sq = Rational(0)
+        l_inf_norm = Rational(0)
+
+        for val in vector:
+            abs_val = abs(val)
+            l1_norm = l1_norm + abs_val
+            l2_norm_sq = l2_norm_sq + abs_val * abs_val
+            if abs_val > l_inf_norm:
+                l_inf_norm = abs_val
+
+        from .utils import exact_or_float_sqrt
+        l2_norm, _ = exact_or_float_sqrt(l2_norm_sq)
+
+        return {
+            "L1": l1_norm,
+            "L2": l2_norm,
+            "Linf": l_inf_norm
+        }
+
+
+    def matrix_norm(self):
+        max_col_sum = Rational(0)
+        max_row_sum = Rational(0)
+        frobenius_sum_sq = Rational(0)
+
+        for c in range(self.cols):
+            current_col_sum = Rational(0)
+            for r in range(self.rows):
+                current_col_sum = current_col_sum + abs(self.data[r][c])
+            
+            if current_col_sum > max_col_sum:
+                max_col_sum = current_col_sum
+
+        for r in range(self.rows):
+            current_row_sum = Rational(0)
+            for c in range(self.cols):
+                abs_val = abs(self.data[r][c])
+                
+                current_row_sum = current_row_sum + abs_val
+                
+                frobenius_sum_sq = frobenius_sum_sq + abs_val * abs_val
+                
+            if current_row_sum > max_row_sum:
+                max_row_sum = current_row_sum
+
+        from .utils import exact_or_float_sqrt
+        frobenius_norm, _ = exact_or_float_sqrt(frobenius_sum_sq)
+
+        return {
+            "L1": max_col_sum,
+            "Linf": max_row_sum,
+            "Frobenius": frobenius_norm
+        }
+
+    def norm(self):
+        if self.rows == 1 or self.cols == 1:
+            return self.vector_norm()
+        return self.matrix_norm()
