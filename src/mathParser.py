@@ -7,11 +7,12 @@ from .runtimeContext import RuntimeContext
 from .monomial import Monomial
 
 class MathParser:
-    def __init__(self, tokens: list, context: RuntimeContext, allow_unbound: bool):
+    def __init__(self, tokens: list, context: RuntimeContext, allow_unbound: bool, shadowed_param: str = None):
         self.tokens = tokens
         self.context = context
         self.cursor = 0
         self.allow_unbound = allow_unbound # False for Assignment, True for Equation Queries
+        self.shadowed_param = shadowed_param.lower() if shadowed_param else None
 
     def peek(self) -> str | None:
         if self.cursor < len(self.tokens):
@@ -135,7 +136,10 @@ class MathParser:
                     factor = self.evaluate_function_call(token)
                 else:
                     # Otherwise, it's a Variable. Look it up!
-                    stored_val = self.context.lookup_variable(token)
+                    if self.shadowed_param and token.lower() == self.shadowed_param:
+                        stored_val = None
+                    else:
+                        stored_val = self.context.lookup_variable(token)
                     
                     # EAGER EVALUATION: If found, inject its value instantly
                     if stored_val is not None:
@@ -194,21 +198,35 @@ class MathParser:
                     return [Monomial(coefficient=abs(raw_val))]
                     
             if func_name.lower() == 'sqrt':
+                if isinstance(raw_val, ComplexRational) and raw_val.imag.num != 0:
+                    raise ValueError("Math Error: Square root of a complex number is not supported.")
+                
                 is_negative = False
-                if isinstance(raw_val, Rational) and raw_val.num < 0:
+                val_to_check = None
+                
+                if isinstance(raw_val, Rational):
+                    val_to_check = raw_val
+                elif isinstance(raw_val, ComplexRational):
+                    val_to_check = raw_val.real
+                else:
+                    val_to_check = Rational.from_string(str(raw_val))
+                
+                if val_to_check.num < 0:
                     is_negative = True
-                    float_val = float(-raw_val.num) / float(raw_val.den)
-                elif isinstance(raw_val, ComplexRational) and raw_val.imag.num == 0 and raw_val.real.num < 0:
-                    is_negative = True
-                    float_val = float(-raw_val.real.num) / float(raw_val.real.den)
-                elif not isinstance(raw_val, (Rational, ComplexRational)) and raw_val < 0:
-                    is_negative = True
-                    float_val = float(-raw_val)
+                    float_val = float(-val_to_check.num) / float(val_to_check.den)
                 
                 if is_negative:
                     res_sqrt = math.sqrt(float_val)
                     res_rat = Rational.from_string(f"{res_sqrt:.12f}".rstrip('0').rstrip('.'))
                     return [Monomial(coefficient=ComplexRational(Rational(0), res_rat))]
+                else:
+                    from .utils import exact_or_float_sqrt
+                    res, is_exact = exact_or_float_sqrt(val_to_check)
+                    if is_exact:
+                        return [Monomial(coefficient=res)]
+                    else:
+                        res_rat = Rational.from_string(f"{res:.12f}".rstrip('0').rstrip('.'))
+                        return [Monomial(coefficient=res_rat)]
 
             # General built-ins
             float_val = float(raw_val.real.num) / float(raw_val.real.den) if isinstance(raw_val, ComplexRational) else (float(raw_val.num) / float(raw_val.den) if isinstance(raw_val, Rational) else float(raw_val))

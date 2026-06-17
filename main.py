@@ -129,7 +129,11 @@ if __name__ == "__main__":
             if catched:
                 continue
             
+            context.reset_context_options()
             catch_passive_options(tags)
+            
+            if not prompt.strip():
+                continue
             
             prompt, is_assignment = strip_and_check(prompt, args)
 

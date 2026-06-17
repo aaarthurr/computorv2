@@ -300,9 +300,14 @@ class ComplexRational:
     def __str__(self):
         from .utils import format_complex
         return format_complex(self)
-
+    
     def __abs__(self):
         from .utils import exact_or_float_sqrt
         magnitude_sq = self.real ** 2 + self.imag ** 2
         res, is_exact = exact_or_float_sqrt(magnitude_sq)
-        return res
+        if is_exact:
+            return res
+        
+        # If not exact, convert the float back to a Rational to keep type safety
+        from .number import Rational
+        return Rational.from_string(f"{res:.12f}".rstrip('0').rstrip('.'))

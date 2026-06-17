@@ -41,6 +41,12 @@ class RuntimeContext:
         self._variables = {}
         self._functions = {}
 
+    def reset_context_options(self) -> None:
+        self._angle_type = "deg"
+        self._display_type = "default"
+        from .utils import set_active_display_mode
+        set_active_display_mode("default")
+
     def set_to_rad(self) -> None:
         self._angle_type = "rad"
 
@@ -108,12 +114,71 @@ class RuntimeContext:
                 self.check_recursion_cycle(start_func, func, functions_dict, functions_dict[func]["tokens"])
 
     def store_function(self, name: str, parameter: str, rhs_tokens: list) -> None:
-        # Validate syntax of function body before storing
+        # 1. Eagerly substitute external variables in rhs_tokens, ignoring the parameter
+        param_clean = parameter.lower()
+        substituted_tokens = []
+        for token in rhs_tokens:
+            if isinstance(token, str) and token.isalpha():
+                token_clean = token.lower()
+                if token_clean != param_clean and token_clean in self._variables:
+                    val = self._variables[token_clean]
+                    if isinstance(val, list):
+                        from .utils import pretty_print
+                        val_str = pretty_print(val, print_output=False)
+                    else:
+                        val_str = str(val)
+                    substituted_tokens.append(f"({val_str})")
+                else:
+                    substituted_tokens.append(token)
+            else:
+                substituted_tokens.append(token)
+        
+        # Re-tokenize the joined string to handle implicit multiplications correctly
+        joined_str = " ".join(substituted_tokens)
+        from .parser import parse_free_form_equation
+        class DummyArgs:
+            verbose = False
+        dummy_args = DummyArgs()
+        token_dict = parse_free_form_equation(joined_str, dummy_args, self)
+        rhs_tokens_substituted = [token_dict[i] for i in sorted(token_dict.keys())]
+
+        # Validate syntax of function body and simplify it before storing
         from .mathParser import MathParser
-        parser = MathParser(rhs_tokens, self, allow_unbound=True)
-        parser.parse_expression()
+        parser = MathParser(rhs_tokens_substituted, self, allow_unbound=True, shadowed_param=parameter)
+        monomials = parser.parse_expression()
         if parser.peek() is not None:
             raise ValueError(f"Syntax Error: Unexpected token '{parser.peek()}' in function definition.")
+
+        # Re-format the simplified monomials back into a clean string and re-tokenize it
+        def format_monomial_clean(m) -> str:
+            if m.is_constant():
+                return str(m.coefficient)
+            coeff_str = ""
+            if m.coefficient == 1:
+                coeff_str = ""
+            elif m.coefficient == -1:
+                coeff_str = "-"
+            else:
+                coeff_str = f"{m.coefficient}*"
+            
+            var_str = m.variable
+            if m.power != 1:
+                var_str = f"{var_str}^{m.power}"
+            return f"{coeff_str}{var_str}"
+
+        simplified_parts = []
+        for m in monomials:
+            simplified_parts.append(format_monomial_clean(m))
+        simplified_str = " + ".join(simplified_parts).replace("+ -", "- ")
+        if not simplified_str:
+            simplified_str = "0"
+
+        token_dict_simplified = parse_free_form_equation(simplified_str, dummy_args, self)
+        rhs_tokens_simplified = [token_dict_simplified[i] for i in sorted(token_dict_simplified.keys())]
+
+        # Update the caller's list in-place so that maths.py:assign prints the simplified form!
+        rhs_tokens.clear()
+        rhs_tokens.extend(rhs_tokens_simplified)
 
         if self.is_reserved_name(name):
             raise ValueError(f"Context Error: '{name}' is a protected system name.")
@@ -179,7 +244,7 @@ class RuntimeContext:
         param = func_data["parameter"]
         tokens = func_data["tokens"]
 
-        parser = MathParser(tokens, self, allow_unbound=True)
+        parser = MathParser(tokens, self, allow_unbound=True, shadowed_param=param)
         monomials = parser.parse_expression()
         if parser.peek() is not None:
             raise ValueError(f"Unexpected token '{parser.peek()}' in function definition.")
@@ -227,7 +292,7 @@ class RuntimeContext:
         tokens = func_data["tokens"]
         param = func_data["parameter"]
 
-        parser = MathParser(tokens, self, allow_unbound=True)
+        parser = MathParser(tokens, self, allow_unbound=True, shadowed_param=param)
         monomials = parser.parse_expression()
         if parser.peek() is not None:
             raise ValueError(f"Syntax Error: Unexpected token '{parser.peek()}'")
@@ -330,7 +395,7 @@ class RuntimeContext:
             
             try:
                 # 1. Parse and simplify the function expression
-                parser = MathParser(tokens, self, allow_unbound=True)
+                parser = MathParser(tokens, self, allow_unbound=True, shadowed_param=param)
                 monomials = parser.parse_expression()
                 if parser.peek() is not None:
                     raise ValueError(f"Syntax Error: Unexpected token '{parser.peek()}'")

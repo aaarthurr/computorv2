@@ -36,7 +36,16 @@ def format_rational(r: Rational, mode: str = 'auto') -> str:
     val = r.num / r.den
     if mode == 'dec':
         return f"{val:.9g}"
+
     if mode == 'frac':
+        if r.den >= 1000000:
+            temp = r.den
+            while temp % 2 == 0:
+                temp //= 2
+            while temp % 5 == 0:
+                temp //= 5
+            if temp == 1:
+                return f"{val:.9g}"
         return f"{r.num}/{r.den}"
         
     if (val * 100000000).is_integer():
@@ -86,7 +95,6 @@ def exact_or_float_sqrt(r: Rational) -> tuple[Rational | float, bool]:
     if n_sqrt * n_sqrt == r.num and d_sqrt * d_sqrt == r.den:
         return Rational(n_sqrt, d_sqrt), True
     return math.sqrt(r.num / r.den), False
-
 
 def pretty_print(tokens, print_output: bool = True) -> str:
     if not tokens:
