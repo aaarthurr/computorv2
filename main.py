@@ -1,18 +1,47 @@
-import argparse
 import sys
 import io
+import os
+import re
 
 from src.parser import parse_free_form_equation, strip_and_check, get_options
 from src.maths import solve, assign
-
-
-
 from src.number import Rational, ComplexRational
 from src.runtimeContext import RuntimeContext
 from src.utils import tc
 
-override_options = ["context", "delete", "derivate", "curv", "display", "transpose", "inverse", "determinant", "norm"]
+#options acts like flags 
+override_options = ["context", "delete", "derivate", "curv", "display", "transpose", "inverse", "determinant", "norm", "history"]
 passive_options = ["rad", "frac", "dec"]
+
+history_log = []
+
+
+def expand_history(prompt: str, history_log: list) -> str:
+    """Expands $<number> patterns to previous history inputs (reversed order: $1 is most recent)."""
+    match_exact = re.fullmatch(r'\s*\$(\d+)\s*', prompt)
+    if match_exact:
+        idx = int(match_exact.group(1))
+        if 1 <= idx <= len(history_log):
+            return history_log[-idx][0]
+        else:
+            raise ValueError(f"History index ${idx} out of range.")
+
+    def replace_match(match):
+        idx = int(match.group(1))
+        if 1 <= idx <= len(history_log):
+            return history_log[-idx][0].rstrip('?').strip()
+        else:
+            raise ValueError(f"History index ${idx} out of range.")
+
+    try:
+        expanded = re.sub(r'\$(\d+)', replace_match, prompt)
+        if expanded != prompt:
+            print(f"{tc.BOLD}{tc.WHITE}Expanded: {expanded}{tc.RESET}")
+        return expanded
+    except ValueError as e:
+        print(f"{tc.BOLD}{tc.RED}Error: {e}{tc.RESET}")
+        return ""
+
 
 def catch_override_options(tags_list: list[str], prompt: str) -> bool:
     matched_tags = [t for t in tags_list if t in override_options]
@@ -29,6 +58,15 @@ def catch_override_options(tags_list: list[str], prompt: str) -> bool:
     sanitized_prompt = prompt.strip()
     
     match matched_tags[0]:
+        case "history":
+            if not history_log:
+                print(f"{tc.BOLD}{tc.YELLOW}No command history available yet.{tc.RESET}")
+            else:
+                for idx, (cmd, res, is_assign) in enumerate(reversed(history_log), 1):
+                    display_res = res.replace('\n', ' ')
+                    print(f"{tc.CYAN}${idx}{tc.RESET} {cmd} {tc.BOLD}|{tc.RESET} {tc.GRAY}{display_res}{tc.RESET}")
+            return True
+
         case "context":
             context.print_context()
             return True
@@ -79,7 +117,6 @@ def catch_override_options(tags_list: list[str], prompt: str) -> bool:
         case _:
             return False
 
-
 def catch_passive_options(tags_list):
     tag = [t for t in tags_list if t in passive_options]
 
@@ -107,6 +144,10 @@ if __name__ == "__main__":
                 print(f"{tc.BOLD}{tc.YELLOW}Exiting...{tc.RESET}")
                 break
 
+            prompt = expand_history(prompt, history_log)
+            if not prompt:
+                continue
+
             prompt, tags = get_options(prompt)
 
             for t in tags:
@@ -123,20 +164,31 @@ if __name__ == "__main__":
             if not prompt.strip():
                 continue
             
-            prompt, is_assignment = strip_and_check(prompt)
+            success = False
+            is_assignment = False
+            old_stdout = sys.stdout
+            captured_stdout = io.StringIO()
+            sys.stdout = captured_stdout
 
-            tokens = parse_free_form_equation(prompt, context, is_assignment=is_assignment)
+            try:
+                prompt_clean, is_assignment = strip_and_check(prompt)
+                tokens = parse_free_form_equation(prompt_clean, context, is_assignment=is_assignment)
+                tokens_list = [value for value in tokens.values() if value is not None]
 
+                if not is_assignment:
+                    solve(tokens_list, context)
+                else:
+                    assign(tokens_list, context)
+                success = True
+            finally:
+                sys.stdout = old_stdout
 
-            tokens_list = [
-                value for value in tokens.values() 
-                if value is not None
-            ]
+            result_str = captured_stdout.getvalue()
+            print(result_str, end="")
 
-            if not is_assignment:
-                solve(tokens_list, context)
-            else:
-                assign(tokens_list, context)
+            if success:
+                history_log[:] = [entry for entry in history_log if entry[0].strip() != prompt_clean]
+                history_log.append((prompt_clean, result_str.strip(), is_assignment))
 
         except (EOFError, KeyboardInterrupt):
             print(f"\n{tc.BOLD}{tc.YELLOW}Exiting...{tc.RESET}")
