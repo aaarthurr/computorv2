@@ -10,11 +10,7 @@ from .utils import format_rational, format_complex, exact_or_float_sqrt, pretty_
 
 
 
-def evaluate_rhs_expression(tokens: list, context: RuntimeContext, args) -> list:
-
-    if args.verbose:
-        print(f"Evaluating RHS Tokens: {tokens}")
-
+def evaluate_rhs_expression(tokens: list, context: RuntimeContext) -> list:
     parser = MathParser(tokens, context, allow_unbound=False)
     
     resolved_monomial_list = parser.parse_expression()
@@ -24,7 +20,7 @@ def evaluate_rhs_expression(tokens: list, context: RuntimeContext, args) -> list
 
     return resolved_monomial_list
 
-def basic_solve(lhs, context: RuntimeContext, args):
+def basic_solve(lhs, context: RuntimeContext):
     # Evaluate LHS expression (Variables must be already bound, so allow_unbound=False)
     parser = MathParser(lhs, context, allow_unbound=False)
     resolved_value = parser.parse_expression()
@@ -41,7 +37,7 @@ def basic_solve(lhs, context: RuntimeContext, args):
     print(f"{tc.BOLD}{clean_value}{tc.RESET}")
     return
 
-def boolean_solve(lhs, rhs, context: RuntimeContext, args):
+def boolean_solve(lhs, rhs, context: RuntimeContext):
     # Evaluate Left Hand Side (allow_unbound=False)
     lhs_parser = MathParser(lhs, context, allow_unbound=False)
     lhs_val = lhs_parser.parse_expression()
@@ -54,8 +50,6 @@ def boolean_solve(lhs, rhs, context: RuntimeContext, args):
     if rhs_parser.peek() is not None:
         raise ValueError(f"Syntax Error: Unexpected token '{rhs_parser.peek()}' at end of RHS.")
 
-    # 3. Compare and print the output
-    # Since all variables are bound, both sides evaluate to a single constant monomial list
     lhs_coeff = lhs_val[0].coefficient if (len(lhs_val) == 1 and lhs_val[0].is_constant()) else lhs_val
     rhs_coeff = rhs_val[0].coefficient if (len(rhs_val) == 1 and rhs_val[0].is_constant()) else rhs_val
     
@@ -65,7 +59,7 @@ def boolean_solve(lhs, rhs, context: RuntimeContext, args):
         print(f"{tc.BOLD}{tc.WHITE}false{tc.RESET}")
     return
 
-def solve(tokens: list, context: RuntimeContext, args):
+def solve(tokens: list, context: RuntimeContext):
     if '=' in tokens: #split into rhs, and lhs
         equal_index = tokens.index('=')
         lhs_tokens = tokens[:equal_index]
@@ -89,29 +83,21 @@ def solve(tokens: list, context: RuntimeContext, args):
 
     #--resulution :
     if not rhs_tokens:
-        basic_solve(lhs_tokens, context, args)
+        basic_solve(lhs_tokens, context)
         return
 
     if rhs_tokens and len(unbound_vars) == 0:
-        boolean_solve(lhs_tokens, rhs_tokens, context, args)
+        boolean_solve(lhs_tokens, rhs_tokens, context)
         return
 
     if rhs_tokens and len(unbound_vars) > 0:
         from .poly_solver import solve_polynomial
-        solve_polynomial(rhs_tokens, lhs_tokens, unbound_vars, var_name=None, context=context, args=args)
+        solve_polynomial(rhs_tokens, lhs_tokens, unbound_vars, var_name=None, context=context)
         return
 
     return
 
-def assign(tokens: list, context: RuntimeContext, args) -> None:
-    """
-    Processes and validates structural assignments for variables and functions.
-    Ensures absolute naming security and isolates memory state allocations.
-    """
-    if args.verbose:
-        print(f"Assignment Engine active. Processing token stream: {tokens}")
-
-    # 1. Safely split the stream into LHS and RHS around the assignment anchor
+def assign(tokens: list, context: RuntimeContext) -> None:
     try:
         equal_index = tokens.index('=')
     except ValueError:
@@ -130,10 +116,7 @@ def assign(tokens: list, context: RuntimeContext, args) -> None:
         if not var_name.isalpha():
             raise ValueError(f"Syntax Error: Invalid variable identifier '{var_name}'. Names must be alphabetic letters.")
 
-        if args.verbose:
-            print(f"Routing target identified as VARIABLE: '{var_name}'")
-
-        resolved_value = evaluate_rhs_expression(rhs_tokens, context, args)
+        resolved_value = evaluate_rhs_expression(rhs_tokens, context)
         
         # Unwrap list of 1 constant monomial to its clean underlying scalar coefficient
         if len(resolved_value) == 1 and resolved_value[0].is_constant():
@@ -157,9 +140,6 @@ def assign(tokens: list, context: RuntimeContext, args) -> None:
 
         if not func_name.isalpha() or not param_name.isalpha():
             raise ValueError("Syntax Error: Function names and parameters must consist strictly of letters.")
-
-        if args.verbose:
-            print(f"Routing target identified as FUNCTION: '{func_name}' with parameter '{param_name}'")
 
         # LAZY EVALUATION: Store the raw mathematical blueprint tokens for calculation later
         context.store_function(func_name, param_name, rhs_tokens)

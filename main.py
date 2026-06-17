@@ -14,13 +14,6 @@ from src.utils import tc
 override_options = ["context", "delete", "derivate", "curv", "display", "transpose", "inverse", "determinant", "norm"]
 passive_options = ["rad", "frac", "dec"]
 
-def parse_arguments():
-    parser = argparse.ArgumentParser(description="Computor V1: The Parser")
-    parser.add_argument("-v", "--verbose", action="store_true", help="Verbose mode")
-
-    return parser.parse_args()
-
-
 def catch_override_options(tags_list: list[str], prompt: str) -> bool:
     matched_tags = [t for t in tags_list if t in override_options]
     
@@ -104,12 +97,7 @@ def catch_passive_options(tags_list):
     return tag[0]
 
 if __name__ == "__main__":
-    args = parse_arguments()
-
     context = RuntimeContext()
-
-    if args.verbose:
-        print(f"{tc.UNDERLINE}{tc.GREEN}\n--- VERBOSE MODE --- \n\n{tc.RESET}")
 
     while True:
         try:
@@ -135,9 +123,9 @@ if __name__ == "__main__":
             if not prompt.strip():
                 continue
             
-            prompt, is_assignment = strip_and_check(prompt, args)
+            prompt, is_assignment = strip_and_check(prompt)
 
-            tokens = parse_free_form_equation(prompt, args, context, is_assignment=is_assignment)
+            tokens = parse_free_form_equation(prompt, context, is_assignment=is_assignment)
 
 
             tokens_list = [
@@ -146,9 +134,9 @@ if __name__ == "__main__":
             ]
 
             if not is_assignment:
-                solve(tokens_list, context, args)
+                solve(tokens_list, context)
             else:
-                assign(tokens_list, context, args)
+                assign(tokens_list, context)
 
         except (EOFError, KeyboardInterrupt):
             print(f"\n{tc.BOLD}{tc.YELLOW}Exiting...{tc.RESET}")

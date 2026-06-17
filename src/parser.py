@@ -28,11 +28,8 @@ def get_options(text: str) -> tuple[str, list[str]]:
     return clean_text, tags_list
 
 
-def strip_and_check(equation_str: str, args) -> tuple[str, bool]:
+def strip_and_check(equation_str: str) -> tuple[str, bool]:
     cleaned = equation_str.replace(" ", "")
-
-    if args.verbose:
-        print(f"Initial raw input received: '{equation_str}'")
 
     if '?' in cleaned:
         # Match a valid pattern: anything followed strictly by one or more '?' at the very end
@@ -71,19 +68,12 @@ def strip_and_check(equation_str: str, args) -> tuple[str, bool]:
     if is_assignment and cleaned.count('=') == 0:
         is_assignment = False  # Reclassify as non-assignment if no '=' is present
 
-    if args.verbose:
-        from .utils import tc
-        print(f"{tc.GREEN}Stripping complete : {tc.RESET}{cleaned} | Is Assignment: {is_assignment}")
-
     return cleaned, is_assignment
 
 
 
 
-def parse_free_form_equation(equation_str: str, args, context=None, is_assignment: bool = False) -> dict:
-    if args.verbose:
-        print("parser entered, starting regex tokenization...")
-
+def parse_free_form_equation(equation_str: str, context=None, is_assignment: bool = False) -> dict:
     token_pattern = r'\d*\.\d+|\d+|[a-zA-Z]+|\*\*|=\?|[=+\-*^/%()[\];,!]'
     
     raw_tokens = re.findall(token_pattern, equation_str)
@@ -108,21 +98,14 @@ def parse_free_form_equation(equation_str: str, args, context=None, is_assignmen
             
             insert_star = False
             
-            # If it's an assignment, do not insert '*' on the LHS (i <= eq_index)
             if not (is_assignment and i <= eq_index):
-                # 1. Digit followed by variable/alpha or parenthesized expression
-                # e.g., '2' followed by 'x', 'i', 'pi', or '('
                 if t1.replace('.', '', 1).isdigit() and (t2.isalpha() or t2 == '(' or t2 == '['):
                     insert_star = True
                 
-                # 2. Variable/alpha followed by parenthesized expression (unless it's a function call)
-                # e.g., 'x' followed by '('
                 elif t1.isalpha() and (t2 == '(' or t2 == '['):
                     if not is_function(t1):
                         insert_star = True
                 
-                # 3. Close parenthesis followed by digit, alpha, or open parenthesis
-                # e.g., ')' followed by '2', 'x', or '('
                 elif (t1 == ')' or t1 == ']') and (t2.replace('.', '', 1).isdigit() or t2.isalpha() or t2 == '(' or t2 == '['):
                     insert_star = True
                 

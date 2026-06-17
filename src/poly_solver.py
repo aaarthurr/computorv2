@@ -153,7 +153,7 @@ def solve_degree_two(poly: dict, var_name: str):
             print(f"{tc.BOLD}{var_name}2 ≃ {real_float:g} + {imag_float:g}i{tc.RESET}")
 
 
-def solve_polynomial(rhs, lhs, unbound_vars: set, var_name: str, context: RuntimeContext, args):
+def solve_polynomial(rhs, lhs, unbound_vars: set, var_name: str, context: RuntimeContext):
     poly, var, degree = parse_and_split_polynomial(rhs, lhs, unbound_vars, context)
     
     if degree == 0:
