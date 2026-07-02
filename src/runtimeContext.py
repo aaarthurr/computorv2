@@ -361,12 +361,23 @@ class RuntimeContext:
         }
     
     def display(self, prompt):
+        import matplotlib
+        from .utils import tc
+        
+        backend = matplotlib.get_backend()
+        non_interactive_backends = {'agg', 'cairo', 'pdf', 'pgf', 'ps', 'svg', 'template'}
+        if backend.lower() in non_interactive_backends:
+            print(f"{tc.BOLD}{tc.RED}Error: Cannot display plots. The current Matplotlib backend '{backend}' is non-interactive (no display/GUI available).{tc.RESET}")
+            print(f"{tc.GRAY}Hint: Ensure you are running in an environment with GUI support (e.g., X11 forwarding, active desktop session) and an interactive backend (e.g., TkAgg, Qt5Agg).{tc.RESET}")
+            return
+
         from .mathParser import MathParser
         from .matrix import Matrix
 
         error_names = []
         names = prompt.split(' ')
         functions_to_display = {}
+        function_displayed = 0
 
         for name in names:
             if '(' in name:
@@ -387,7 +398,11 @@ class RuntimeContext:
         
         x_val = np.linspace(-40, 40, 500)
     
-        fig, ax = plt.subplots(figsize=(10, 6), dpi=100)
+        try:
+            fig, ax = plt.subplots(figsize=(10, 6), dpi=100)
+        except Exception as e:
+            print(f"{tc.BOLD}{tc.RED}Error: Failed to initialize graphical window. Details: {e}{tc.RESET}")
+            return
         
         for func_name, metadata in functions_to_display.items():
             param = metadata['parameter']
@@ -410,6 +425,8 @@ class RuntimeContext:
                         coeff = coeff.real
                     if isinstance(coeff, Matrix):
                         raise ValueError("Math Error: Cannot plot functions returning a Matrix.")
+                    
+                    # if 
                         
                     if hasattr(coeff, 'num'):  # Rational
                         coeff_val = float(coeff.num) / coeff.den
@@ -430,12 +447,19 @@ class RuntimeContext:
                     simplified_expr = "0"
                 
                 # 4. Generate dynamic line styles using formatting anchors
+
+
+                function_displayed += 1
                 ax.plot(x_val, y_val, label=f"${func_name}({param}) = {simplified_expr}$", linewidth=2)
                 
             except Exception as e:
-                print(f"[Runtime Error] Failed to evaluate function '{func_name}': {e}")
+                print(f"Failed to evaluate function '{func_name}': {e}")
                 continue
 
+
+        if function_displayed == 0:
+            raise ValueError("No valid functions could be evaluated for display. Please check the function definitions and ensure they are valid.")
+        
         # 5. Presentation Layer & Aesthetics
         ax.axhline(0, color='black', linewidth=0.8, linestyle=':', alpha=0.5)
         ax.axvline(0, color='black', linewidth=0.8, linestyle=':', alpha=0.5)

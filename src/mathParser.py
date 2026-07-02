@@ -6,6 +6,8 @@ from .parser import parse_free_form_equation
 from .runtimeContext import RuntimeContext
 from .monomial import Monomial
 
+
+#this is where most math happens and here we basicaly does resulation in paralel as the parsing, we keep track of parenthesis and priority 
 class MathParser:
     def __init__(self, tokens: list, context: RuntimeContext, allow_unbound: bool, shadowed_param: str = None):
         self.tokens = tokens
@@ -26,20 +28,20 @@ class MathParser:
         self.cursor += 1
         return token
 
-    # --- PEMDAS LAYER 1: Addition & Subtraction ---
+    # 1: Addition & Subtraction
     def parse_expression(self) -> list:
         terms = self.parse_term()
         while self.peek() in ('+', '-'):
             op = self.consume()
             right_terms = self.parse_term()
-            # If '-', loop through right_terms and negate their Monomial coefficients
+            # If '-', loop through right_terms and negate their Monomial coefficients to get the correct subtraction
             if op == '-':
                 for m in right_terms:
                     m.coefficient = -m.coefficient
             terms.extend(right_terms)
         return self.compress_monomials(terms)
 
-    # --- PEMDAS LAYER 2: Multiplication, Division, Modulo & Matrix Product ---
+    # 2: Multiplication, Division, Modulo & Matrix Product
     def parse_term(self) -> list:
         factors = self.parse_power()
         while self.peek() in ('*', '/', '%', '**'):
@@ -48,7 +50,7 @@ class MathParser:
             factors = self.multiply_lists(factors, right_factors, op)
         return factors
 
-    # --- PEMDAS LAYER 3: Exponentiation ---
+    # 3: Exponentiation
     def parse_power(self) -> list:
         factors = self.parse_factor()
         while self.peek() == '^':
@@ -99,7 +101,7 @@ class MathParser:
         from .matrix import Matrix
         return [Monomial(coefficient=Matrix(rows))]
 
-    # --- PEMDAS LAYER 4: Literals, Parens, Variables, Functions, Unary ---
+    # 4: Literals, Parens, Variables, Functions, Unary
     def parse_factor(self) -> list:
         # 1. Unary prefix operators & matrix check
         if self.peek() == '[': #check for matrix literal
@@ -141,7 +143,10 @@ class MathParser:
                     else:
                         stored_val = self.context.lookup_variable(token)
                     
-                    # EAGER EVALUATION: If found, inject its value instantly
+                    # EAGER EVALUATION
+                    # WHAT IS EAGER
+                    # Once we validate a value, we insert it to the factor list
+                    # in  Doing this we keep a live update of all factors
                     if stored_val is not None:
                         # Wrap scalar values (Rational, ComplexRational) into Monomial list
                         if isinstance(stored_val, (Rational, ComplexRational)):
@@ -255,7 +260,6 @@ class MathParser:
 
 
     def compress_monomials(self, term_list: list) -> list:
-        """Groups terms with the same power to keep the list flat and clean."""
         grouped = {}
         for m in term_list:
             var = m.variable
@@ -299,7 +303,6 @@ class MathParser:
         return compressed
 
     def multiply_lists(self, left: list, right: list, op: str) -> list:
-        """Distributes multiplication across two Monomial lists."""
         if op == '*':
             result = []
             for m1 in left:

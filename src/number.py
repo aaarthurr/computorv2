@@ -1,7 +1,7 @@
 import math
 
 class Rational:
-    """Represents an exact rational number (numerator / denominator)."""
+    """Represents an exact rational number (numerator / denominator). we cratea an object with operator overlaod"""
     
     def __init__(self, numerator: int, denominator: int = 1):
         if denominator == 0:
@@ -18,10 +18,6 @@ class Rational:
 
     @classmethod
     def from_string(cls, value: str):
-        """
-        Robust string parser to handle standard integers and decimals.
-        Converts '4.5' into 45/10, which __init__ automatically reduces to 9/2.
-        """
         if '.' in value:
             integer_part, decimal_part = value.split('.')
 
@@ -80,7 +76,6 @@ class Rational:
         return self.__mul__(other)
 
     def reciprocal(self):
-        """Returns 1 / self (flips the numerator and denominator)"""
         if self.num == 0:
             raise ZeroDivisionError("Math Error: Cannot divide by zero.")
         return Rational(self.den, self.num)
@@ -96,7 +91,6 @@ class Rational:
         return NotImplemented
 
     def __rtruediv__(self, other):
-        # Handles: 5 / Rational(2, 3) -> 5 * Rational(3, 2)
         if isinstance(other, int):
             other = Rational(other)
         return other * self.reciprocal()
@@ -132,9 +126,6 @@ class Rational:
         return format_rational(self)
 
     def __eq__(self, other):
-        """
-        Crucial for the parser's compress_monomials to check if a coefficient is 0.
-        """
         if isinstance(other, int):
             return self.num == other and self.den == 1
         if isinstance(other, Rational):
@@ -178,17 +169,9 @@ class Rational:
         return NotImplemented
 
     def __abs__(self):
-        """
-        Required because ComplexRational's __repr__ calls abs(self.imag).
-        """
         return Rational(abs(self.num), self.den)
 
     def __pow__(self, power):
-        """
-        Handles polynomial exponentiation (e.g., squaring a fraction).
-        Currently restricted to integer powers to avoid forcing irrational numbers 
-        (like sqrt(2)) back into the Rational class.
-        """
         if not isinstance(power, int):
             raise ValueError("Math Error: Rational numbers currently only support integer exponentiation.")
         
@@ -202,7 +185,7 @@ class Rational:
 
 
 class ComplexRational:
-    """Represents a complex number with exact rational coefficients: real + imag * i"""
+    """Represents a complex number with exact rational coefficients: real + imag * i, same as rational we create a fully functional object"""
     
     def __init__(self, real, imag=0):
         self.real = real if isinstance(real, Rational) else Rational(int(real))
@@ -284,17 +267,13 @@ class ComplexRational:
         return False
 
     def __repr__(self):
-        # Purely real (includes 0 + 0i)
         if self.imag.num == 0:
             return f"{self.real}"
             
-        # Purely imaginary
         if self.real.num == 0:
             return f"{self.imag}i"
             
-        # Standard complex layout
         sign = "+" if self.imag.num > 0 else "-"
-        # Utilizes the newly added Rational.__abs__ to prevent printing "4 + -3i"
         return f"{self.real} {sign} {abs(self.imag)}i"
 
     def __str__(self):
@@ -308,6 +287,40 @@ class ComplexRational:
         if is_exact:
             return res
         
-        # If not exact, convert the float back to a Rational to keep type safety
+        # If not exact we convert to float
         from .number import Rational
         return Rational.from_string(f"{res:.12f}".rstrip('0').rstrip('.'))
+
+    def __pow__(self, power):
+        if isinstance(power, Rational):
+            if power.den != 1:
+                raise ValueError("Math Error: Complex numbers currently only support integer exponentiation.")
+            power = power.num
+        elif isinstance(power, ComplexRational):
+            if power.imag.num != 0 or power.real.den != 1:
+                raise ValueError("Math Error: Complex numbers currently only support integer exponentiation.")
+            power = power.real.num
+            
+        if not isinstance(power, int):
+            raise ValueError("Math Error: Complex numbers currently only support integer exponentiation.")
+
+        if power == 0:
+            return ComplexRational(Rational(1), Rational(0))
+            
+        if power < 0:
+            if self.real.num == 0 and self.imag.num == 0:
+                raise ZeroDivisionError("Math Error: Cannot raise complex zero to a negative power.")
+            base = ComplexRational(Rational(1), Rational(0)) / self
+            power = -power
+        else:
+            base = self
+
+        # Exponentiation by squaring
+        result = ComplexRational(Rational(1), Rational(0))
+        while power > 0:
+            if power % 2 == 1:
+                result = result * base
+            base = base * base
+            power //= 2
+        return result
+

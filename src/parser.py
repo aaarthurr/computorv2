@@ -32,7 +32,7 @@ def strip_and_check(equation_str: str) -> tuple[str, bool]:
     cleaned = equation_str.replace(" ", "")
 
     if '?' in cleaned:
-        # Match a valid pattern: anything followed strictly by one or more '?' at the very end
+        # if ?, we will prompt a result
         if not re.match(r'^[^?]+\?+$', cleaned):
             raise ValueError("Syntax Error: The query operator '?' must only appear at the very end of the line.")
         
@@ -41,7 +41,7 @@ def strip_and_check(equation_str: str) -> tuple[str, bool]:
         # Strip all trailing '?' characters out to leave a clean math string for tokenization
         cleaned = cleaned.rstrip('?')
     else:
-        # No '?' present anywhere means this track targets a memory context write
+        # No '?' present meeans assignement
         is_assignment = True
 
     if re.search(r'//|%%|\^\^|([*/%^])(?!\1)[*/%^]|\*{3,}', cleaned):
@@ -56,7 +56,7 @@ def strip_and_check(equation_str: str) -> tuple[str, bool]:
 
     cleaned = re.sub(r'([\*/%=\^\(\[;,])\+', r'\1', cleaned)
 
-    # 5. Clean up redundant decimal points
+    # 5. clean the multiple .
     cleaned = re.sub(r'\.{2,}', '.', cleaned)
 
     if cleaned.count('=') > 1:
@@ -78,7 +78,7 @@ def parse_free_form_equation(equation_str: str, context=None, is_assignment: boo
     
     raw_tokens = re.findall(token_pattern, equation_str)
 
-    # Helper to check if identifier is a known function call
+    # if is a building function
     def is_function(name):
         builtins = {"sqrt", "cbrt", "log", "ln", "exp", "sin", "cos", "tan", "abs"}
         if name.lower() in builtins:
