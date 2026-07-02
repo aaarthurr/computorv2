@@ -368,7 +368,6 @@ class RuntimeContext:
         non_interactive_backends = {'agg', 'cairo', 'pdf', 'pgf', 'ps', 'svg', 'template'}
         if backend.lower() in non_interactive_backends:
             print(f"{tc.BOLD}{tc.RED}Error: Cannot display plots. The current Matplotlib backend '{backend}' is non-interactive (no display/GUI available).{tc.RESET}")
-            print(f"{tc.GRAY}Hint: Ensure you are running in an environment with GUI support (e.g., X11 forwarding, active desktop session) and an interactive backend (e.g., TkAgg, Qt5Agg).{tc.RESET}")
             return
 
         from .mathParser import MathParser
