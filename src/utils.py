@@ -141,3 +141,24 @@ def pretty_print(tokens, print_output: bool = True) -> str:
     if print_output:
         print(f"{tc.CYAN}{formatted_str}{tc.RESET}")
     return formatted_str
+
+def to_parseable_string(val):
+    from .matrix import Matrix
+    from .number import Rational, ComplexRational
+    
+    if isinstance(val, Matrix):
+        rows_str = []
+        for row in val.data:
+            row_str = ",".join(to_parseable_string(elem) for elem in row)
+            rows_str.append(f"[{row_str}]")
+        return f"[{';'.join(rows_str)}]"
+        
+    elif isinstance(val, ComplexRational):
+        from .utils import format_complex
+        return format_complex(val, mode='frac')
+        
+    elif isinstance(val, Rational):
+        from .utils import format_rational
+        return format_rational(val, mode='frac')
+        
+    return str(val)

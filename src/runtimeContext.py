@@ -3,7 +3,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import copy
 
-from .utils import tc
+
+from .utils import tc, to_parseable_string
 
 class RuntimeContext:
     """
@@ -115,6 +116,9 @@ class RuntimeContext:
 
     def store_function(self, name: str, parameter: str, rhs_tokens: list) -> None:
         # 1. Eagerly substitute external variables in rhs_tokens, ignoring the parameter
+
+        from .matrix import Matrix
+
         param_clean = parameter.lower()
         substituted_tokens = []
         for token in rhs_tokens:
@@ -126,7 +130,7 @@ class RuntimeContext:
                         from .utils import pretty_print
                         val_str = pretty_print(val, print_output=False)
                     else:
-                        val_str = str(val)
+                        val_str = to_parseable_string(val)
                     substituted_tokens.append(f"({val_str})")
                 else:
                     substituted_tokens.append(token)
@@ -159,7 +163,7 @@ class RuntimeContext:
             elif m.coefficient == -1:
                 coeff_str = "-"
             else:
-                coeff_str = f"{m.coefficient}*"
+                coeff_str = f"({to_parseable_string(m.coefficient)})*   "
             
             var_str = m.variable
             if m.power != 1:
