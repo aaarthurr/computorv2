@@ -21,20 +21,53 @@ def evaluate_rhs_expression(tokens: list, context: RuntimeContext) -> list:
     return resolved_monomial_list
 
 def basic_solve(lhs, context: RuntimeContext):
-    # Evaluate LHS expression (Variables must be already bound, so allow_unbound=False)
-    parser = MathParser(lhs, context, allow_unbound=False)
-    resolved_value = parser.parse_expression()
-    
-    # Verify the parser consumed all tokens (avoid syntax errors like "4 + 5 6")
-    if parser.peek() is not None:
-        raise ValueError(f"Syntax Error: Unexpected token '{parser.peek()}' at the end of the expression.")
-    # 3. Unwrap the monomial list for clean output formatting
-    if len(resolved_value) == 1 and resolved_value[0].is_constant():
-        clean_value = resolved_value[0].coefficient
-    else:
-        clean_value = resolved_value
+    # Check if the query is a function signature: e.g., f(z) = ?
+    is_func_query = False
+    func_name = None
+    param_name = None
+    if len(lhs) == 4 and lhs[1] == '(' and lhs[3] == ')':
+        func_name = lhs[0].lower()
+        param_name = lhs[2].lower()
+        func_data = context.lookup_function(func_name)
+        if func_data and func_data["type"] == "USER":
+            if context.lookup_variable(param_name) is None:
+                is_func_query = True
+
+    try:
+        # Evaluate LHS expression (Only allow unbound if it's a function query with unbound parameter)
+        parser = MathParser(lhs, context, allow_unbound=is_func_query)
+        resolved_value = parser.parse_expression()
         
-    print(f"{tc.BOLD}{clean_value}{tc.RESET}")
+        # Verify the parser consumed all tokens (avoid syntax errors like "4 + 5 6")
+        if parser.peek() is not None:
+            raise ValueError(f"Syntax Error: Unexpected token '{parser.peek()}' at the end of the expression.")
+        # 3. Unwrap the monomial list for clean output formatting
+        if len(resolved_value) == 1 and resolved_value[0].is_constant():
+            clean_value = resolved_value[0].coefficient
+        else:
+            from .utils import format_monomial_list
+            clean_value = format_monomial_list(resolved_value)
+            
+        print(f"{tc.BOLD}{clean_value}{tc.RESET}")
+    except Exception as e:
+        if is_func_query and func_name and param_name:
+            func_data = context.lookup_function(func_name)
+            if func_data and func_data["type"] == "USER":
+                orig_param = func_data["parameter"]
+                orig_tokens = func_data["tokens"]
+                
+                # Substitute orig_param with param_name in the tokens
+                substituted_tokens = []
+                for token in orig_tokens:
+                    if isinstance(token, str) and token.lower() == orig_param.lower():
+                        substituted_tokens.append(param_name)
+                    else:
+                        substituted_tokens.append(token)
+                        
+                from .utils import pretty_print
+                pretty_print(substituted_tokens)
+                return
+        raise e
     return
 
 def boolean_solve(lhs, rhs, context: RuntimeContext):
@@ -145,7 +178,16 @@ def assign(tokens: list, context: RuntimeContext) -> None:
         context.store_function(func_name, param_name, rhs_tokens)
         
         # Print confirmation layout mapping matching subject expectations
-        pretty_print(rhs_tokens)
+        from .mathParser import MathParser
+        from .utils import format_monomial_list, pretty_print
+        parser = MathParser(rhs_tokens, context, allow_unbound=True, shadowed_param=param_name)
+        try:
+            monomials = parser.parse_expression()
+            if parser.peek() is not None:
+                raise ValueError()
+            print(f"{tc.CYAN}{format_monomial_list(monomials)}{tc.RESET}")
+        except Exception:
+            pretty_print(rhs_tokens)
         return
 
     # 4. Catch-all for structural syntax chaos (e.g., '2 + 2 = x' or 'f(x) + 1 = y')

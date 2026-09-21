@@ -162,3 +162,114 @@ def to_parseable_string(val):
         return format_rational(val, mode='frac')
         
     return str(val)
+
+def format_monomial_list(monomials: list) -> str:
+    if not monomials:
+        return "0"
+        
+    from .matrix import Matrix
+    from .number import Rational, ComplexRational
+    
+    def is_zero(coeff):
+        if isinstance(coeff, (int, float)):
+            return coeff == 0
+        elif hasattr(coeff, 'num'):
+            return coeff.num == 0
+        elif hasattr(coeff, 'real') and hasattr(coeff, 'imag'):
+            return coeff.real.num == 0 and coeff.imag.num == 0
+        return False
+        
+    active_monomials = [m for m in monomials if not is_zero(m.coefficient)]
+    
+    if not active_monomials:
+        return "0"
+            
+    parts = []
+    for idx, m in enumerate(active_monomials):
+        coeff = m.coefficient
+        is_neg = False
+        abs_coeff = coeff
+        
+        if isinstance(coeff, (int, float)):
+            if coeff < 0:
+                is_neg = True
+                abs_coeff = -coeff
+        elif isinstance(coeff, Rational):
+            if coeff.num < 0:
+                is_neg = True
+                abs_coeff = abs(coeff)
+        elif isinstance(coeff, ComplexRational):
+            if coeff.imag.num == 0 and coeff.real.num < 0:
+                is_neg = True
+                abs_coeff = ComplexRational(abs(coeff.real), Rational(0))
+                
+        if m.is_constant():
+            if idx > 0 and is_neg:
+                parts.append("-")
+                parts.append(to_parseable_string(abs_coeff))
+            elif idx > 0:
+                parts.append("+")
+                parts.append(to_parseable_string(coeff))
+            else:
+                parts.append(to_parseable_string(coeff))
+            continue
+
+        if isinstance(coeff, Matrix):
+            var_str = m.variable
+            if m.power != 1:
+                var_str = f"{var_str}^{m.power}"
+            m_str = f"{var_str} * {to_parseable_string(coeff)}"
+            if idx > 0:
+                parts.append("+")
+            parts.append(m_str)
+            continue
+            
+        coeff_val_str = ""
+        if abs_coeff == 1:
+            coeff_val_str = ""
+        else:
+            coeff_val_str = f"{to_parseable_string(abs_coeff)} * "
+            
+        var_str = m.variable
+        if m.power != 1:
+            var_str = f"{var_str}^{m.power}"
+            
+        m_str = f"{coeff_val_str}{var_str}"
+        
+        if idx > 0:
+            if is_neg:
+                parts.append("-")
+                parts.append(m_str)
+            else:
+                parts.append("+")
+                if coeff == 1:
+                    coeff_val_str = ""
+                else:
+                    coeff_val_str = f"{to_parseable_string(coeff)} * "
+                parts.append(f"{coeff_val_str}{var_str}")
+        else:
+            if is_neg:
+                if abs_coeff == 1:
+                    parts.append(f"-{var_str}")
+                else:
+                    parts.append(f"-{coeff_val_str}{var_str}")
+            else:
+                if coeff == 1:
+                    parts.append(var_str)
+                else:
+                    coeff_val_str = f"{to_parseable_string(coeff)} * "
+                    parts.append(f"{coeff_val_str}{var_str}")
+                    
+    res_str = ""
+    for i, p in enumerate(parts):
+        if i == 0:
+            res_str = p
+        else:
+            if p in ("+", "-"):
+                res_str += f" {p}"
+            else:
+                if res_str[-1] in ("+", "-"):
+                    res_str += f" {p}"
+                else:
+                    res_str += f" + {p}"
+    return res_str

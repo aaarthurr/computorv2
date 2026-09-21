@@ -140,49 +140,33 @@ class RuntimeContext:
         # Re-tokenize the joined string to handle implicit multiplications correctly
         joined_str = " ".join(substituted_tokens)
         from .parser import parse_free_form_equation
-        class DummyArgs:
-            verbose = False
-        dummy_args = DummyArgs()
-        token_dict = parse_free_form_equation(joined_str, dummy_args, self)
+        token_dict = parse_free_form_equation(joined_str, self, is_assignment=True)
         rhs_tokens_substituted = [token_dict[i] for i in sorted(token_dict.keys())]
 
         # Validate syntax of function body and simplify it before storing
         from .mathParser import MathParser
         parser = MathParser(rhs_tokens_substituted, self, allow_unbound=True, shadowed_param=parameter)
-        monomials = parser.parse_expression()
-        if parser.peek() is not None:
-            raise ValueError(f"Syntax Error: Unexpected token '{parser.peek()}' in function definition.")
-
-        # Re-format the simplified monomials back into a clean string and re-tokenize it
-        def format_monomial_clean(m) -> str:
-            if m.is_constant():
-                return str(m.coefficient)
-            coeff_str = ""
-            if m.coefficient == 1:
-                coeff_str = ""
-            elif m.coefficient == -1:
-                coeff_str = "-"
-            else:
-                coeff_str = f"({to_parseable_string(m.coefficient)})*   "
+        try:
+            monomials = parser.parse_expression()
+            if parser.peek() is not None:
+                raise ValueError(f"Syntax Error: Unexpected token '{parser.peek()}' in function definition.")
             
-            var_str = m.variable
-            if m.power != 1:
-                var_str = f"{var_str}^{m.power}"
-            return f"{coeff_str}{var_str}"
+            # Re-format the simplified monomials back into a clean string and re-tokenize it
+            from .utils import format_monomial_list
+            simplified_str = format_monomial_list(monomials)
 
-        simplified_parts = []
-        for m in monomials:
-            simplified_parts.append(format_monomial_clean(m))
-        simplified_str = " + ".join(simplified_parts).replace("+ -", "- ")
-        if not simplified_str:
-            simplified_str = "0"
+            token_dict_simplified = parse_free_form_equation(simplified_str, self, is_assignment=True)
+            rhs_tokens_simplified = [token_dict_simplified[i] for i in sorted(token_dict_simplified.keys())]
 
-        token_dict_simplified = parse_free_form_equation(simplified_str, dummy_args, self)
-        rhs_tokens_simplified = [token_dict_simplified[i] for i in sorted(token_dict_simplified.keys())]
-
-        # Update the caller's list in-place so that maths.py:assign prints the simplified form!
-        rhs_tokens.clear()
-        rhs_tokens.extend(rhs_tokens_simplified)
+            # Update the caller's list in-place so that maths.py:assign prints the simplified form!
+            rhs_tokens.clear()
+            rhs_tokens.extend(rhs_tokens_simplified)
+        except ValueError as e:
+            if any(term in str(e) for term in ("Math Error", "Runtime Error", "ZeroDivisionError", "division by zero")):
+                rhs_tokens.clear()
+                rhs_tokens.extend(rhs_tokens_substituted)
+            else:
+                raise e
 
         if self.is_reserved_name(name):
             raise ValueError(f"Context Error: '{name}' is a protected system name.")
