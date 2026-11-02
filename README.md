@@ -4,6 +4,9 @@
 
 > Built as part of the **42** curriculum — all core mathematical types (`Rational`, `ComplexRational`, `Matrix`, `Monomial`) and the recursive-descent algebraic parser are implemented from scratch without external complex-number or linear-algebra libraries.
 
+> [!WARNING]
+> This repository is made public solely to showcase my curriculum progress. It is not intended to be copied or used as a base for personal work.
+> Please do not use this code to validate your own 42 projects. Blindly copying this repository is considered plagiarism and will result in a **-42** grade for cheating. I take no responsibility for any academic penalties incurred by misusing this code.
 ---
 
 ## Table of Contents
